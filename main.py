@@ -75,18 +75,15 @@ def set_webhook(viber):
 
 
 def botify(queue, viber):
-    # all bot logic should be implemented here
-    pass
+    viber.get_account_info()  # do something with it
+    while True:
+        # handle requests here
+        pass
 
 
 if __name__ == "__main__":
     # debug support
     pydevd.settrace('admsg.ru', port=5123, stdoutToServer=True, stderrToServer=True)
-
-    scheduler = sched.scheduler(time.time, time.sleep)
-    scheduler.enter(5, 1, set_webhook, (viber,))
-    t = Process(target=scheduler.run)
-    t.start()
 
     viber_bot = Process(name=viber.name(),
                         target=botify,
@@ -95,5 +92,12 @@ if __name__ == "__main__":
     # subscribers_dict.setdefault(class, []).append(value)
     viber_bot.start()
 
+    # init webhooks
+    scheduler = sched.scheduler(time.time, time.sleep)
+    scheduler.enter(5, 1, set_webhook, (viber,))
+    t = Process(target=scheduler.run)
+    t.start()
+
+    # REST start
     context = ('certificates/server.crt', 'certificates/server.key')
     app.run(host='0.0.0.0', port=8443, debug=True, ssl_context=context)
