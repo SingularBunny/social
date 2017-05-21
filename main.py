@@ -84,6 +84,17 @@ def incoming_from_viber():
 
     return Response(status=200)
 
+@app.route('/post_message/<string:admin_id>', methods=['POST'])
+def post_message(admin_id):
+    logger.debug("Send message request. post data: {0}".format(request.get_data()))
+    account_info = viber.get_account_info()
+    viber.post(admin_id, request.get_data())
+    return Response(status=200)
+
+@app.route('/account_info', methods=['GET'])
+def account_info(admin_id):
+    logger.debug("Get account info request.")
+    return viber.get_account_info()
 
 def set_webhook(viber):
     viber.set_webhook('https://admsg.ru:8443/')
