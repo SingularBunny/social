@@ -1,9 +1,15 @@
+import json
+
 from pymongo import MongoClient
 
 import pydevd
 from multiprocessing import Process, Queue
 
 from flask import Flask, request, Response
+
+from viberbot.api import messages
+from viberbot.api.viber_requests.viber_request import ViberRequest
+
 from viberbot import Api
 from viberbot.api.bot_configuration import BotConfiguration
 from viberbot.api.messages.text_message import TextMessage
@@ -54,12 +60,12 @@ viber = Api(BotConfiguration(
 subscribers_dict = {}
 
 # incoming queues of all processes
-event_queues_dict = {}
+event_queues_dict = {EVENT_PROCESSOR: Queue()}
 
 # --- REST block START ---
 @app.route('/', methods=['POST'])
 def incoming_from_viber():
-    logger.debug("received request. post data: {0}".format(request.get_data()))
+    logger.debug('received request. post data: {0}'.format(request.get_data()))
 
     viber_request = viber.parse_request(request.get_data())
 
@@ -76,7 +82,7 @@ def incoming_from_viber():
             TextMessage(None, None, viber_request.get_event_type())
         ])
     elif isinstance(viber_request, ViberFailedRequest):
-        logger.warn("client failed receiving message. failure: {0}".format(viber_request))
+        logger.warn('client failed receiving message. failure: {0}'.format(viber_request))
     # --- simple request handling block END ---
 
     event_handler_queue = event_queues_dict.get(EVENT_PROCESSOR)
@@ -86,26 +92,32 @@ def incoming_from_viber():
 
 @app.route('/post_message/<string:admin_id>', methods=['POST'])
 def post_message(admin_id):
-    logger.debug("Send message request. post data: {0}".format(request.get_data()))
-    account_info = viber.get_account_info()
-    viber.post(admin_id, request.get_data())
+    logger.debug('Send message request. post data: {0}'.format(request.get_data()))
+    viber.post(admin_id, messages.get_message(json.loads(request.get_data())))
     return Response(status=200)
 
 @app.route('/account_info', methods=['GET'])
-def account_info(admin_id):
-    logger.debug("Get account info request.")
-    return viber.get_account_info()
+def account_info():
+    logger.debug('Get account info request.')
+    return json.dumps(viber.get_account_info())
 
-def set_webhook(viber):
-    viber.set_webhook('https://admsg.ru:8443/')
+def set_webhook(logger, viber):
+    while True:
+        try:
+            viber.set_webhook('https://admsg.ru:{}/'.format(PORT))
+            break
+        except Exception as e:
+            logger.debug(e)
+
 # --- REST block END ---
 
 # --- Processes block START ---
 #
-def process_events(event_queues_dict, subscribers_dict):
+def process_events(logger, event_queues_dict, subscribers_dict):
     """
     Publisher-subscriber pattern implementation.
     
+    :param logger: logger.
     :param event_queues_dict: dictionary with incoming queues of processes.
     :param subscribers_dict: Request class is key and process name is value.
     """
@@ -115,13 +127,15 @@ def process_events(event_queues_dict, subscribers_dict):
         for class_key, subscribers in subscribers_dict.iteritems():
             if isinstance(event, class_key):
                 for subscriber in subscribers:
+                    logger.debug('Process event: {0} to subscriber: {1}'.format(event, subscriber))
                     event_queues_dict.get(subscriber).put_nowait(event)
 
 
-def maintain_statistics(queue):
+def maintain_statistics(logger, queue):
     """
     Stores statistics.
     
+    :param logger: logger.
     :param queue: incoming queue.
     :param viber: Viber API instance.
     """
@@ -130,6 +144,7 @@ def maintain_statistics(queue):
     db = client[MONGO_DB]
     while True:
         event = queue.get()
+        logger.debug('Store event: {0} to Mongo'.format(event))
         db.events.insert_one(event)
 # --- Processes block END ---
 
@@ -143,30 +158,38 @@ def init_mongo():
     db.events.create_index([('$**', 'text')])
     client.close()
 
-if __name__ == "__main__":
+if __name__ == '__main__':
 
     # debug support
-    pydevd.settrace('admsg.ru', port=5123, stdoutToServer=True, stderrToServer=True)
+    #pydevd.settrace('109.195.27.157', port=5123, stdoutToServer=True, stderrToServer=True, suspend=False)
 
     init_mongo()
 
     event_processor = Process(name=EVENT_PROCESSOR,
                               target=process_events,
-                              args=(event_queues_dict.setdefault(EVENT_PROCESSOR, Queue())))
+                              args=(logger,
+                                    event_queues_dict,
+                                    subscribers_dict
+                                    ))
     event_processor.start()
+    logger.debug('{0} started'.format(EVENT_PROCESSOR))
 
     stats_maintainer = Process(name=STATS_MAINTAINER,
                                target=maintain_statistics,
-                               args=(event_queues_dict.setdefault(STATS_MAINTAINER, Queue())))
+                               args=(logger,
+                                     event_queues_dict.setdefault(STATS_MAINTAINER, Queue())))
     # make subscriptions
-    # subscribers_dict.setdefault(class, []).append(value)
+    subscribers_dict.setdefault(ViberRequest, []).append(STATS_MAINTAINER)
     stats_maintainer.start()
+    logger.debug('{0} started'.format(STATS_MAINTAINER))
 
     # init webhooks
     scheduler = sched.scheduler(time.time, time.sleep)
-    scheduler.enter(5, 1, set_webhook, (viber,))
-    t = Process(target=scheduler.run)
+    scheduler.enter(5, 1, set_webhook, (logger, viber))
+    t = Process(name='WebhookSetter',
+                target=scheduler.run)
     t.start()
+    logger.debug('{0} started'.format('WebhookSetter'))
 
     # REST start
     context = (PATH_TO_CRT, PATH_TO_KEY)
