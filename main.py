@@ -8,7 +8,7 @@ from multiprocessing import Process, Queue
 from flask import Flask, request, Response
 
 from viberbot.api import messages
-from viberbot.api.viber_requests.viber_request import ViberRequest
+from viberbot.api.viber_requests import ViberRequest
 
 from viberbot import Api
 from viberbot.api.bot_configuration import BotConfiguration
@@ -42,12 +42,16 @@ PATH_TO_KEY = 'certificates/server.key'
 EVENT_PROCESSOR = 'EventProcessor'
 STATS_MAINTAINER = 'StatsStorer'
 
-logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
-handler = logging.StreamHandler()
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-handler.setFormatter(formatter)
-logger.addHandler(handler)
+def init_logger():
+    logger = logging.getLogger()
+    logger.setLevel(logging.DEBUG)
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    return logger
+
+logger = init_logger()
 
 app = Flask(__name__)
 viber = Api(BotConfiguration(
@@ -71,15 +75,15 @@ def incoming_from_viber():
 
     # --- simple request handling block START ---
     if isinstance(viber_request, ViberMessageRequest):
-        message = viber_request.get_message()
-        viber.send_messages(viber_request.get_sender().get_id(), [
+        message = viber_request.message()
+        viber.send_messages(viber_request.sender().get_id(), [
             message
         ])
     elif isinstance(viber_request, ViberConversationStartedRequest) \
             or isinstance(viber_request, ViberSubscribedRequest) \
             or isinstance(viber_request, ViberUnsubscribedRequest):
-        viber.send_messages(viber_request.get_user().get_id(), [
-            TextMessage(None, None, viber_request.get_event_type())
+        viber.send_messages(viber_request.user.id, [
+            TextMessage(None, None, viber_request.type)
         ])
     elif isinstance(viber_request, ViberFailedRequest):
         logger.warn('client failed receiving message. failure: {0}'.format(viber_request))
@@ -101,7 +105,9 @@ def account_info():
     logger.debug('Get account info request.')
     return json.dumps(viber.get_account_info())
 
-def set_webhook(logger, viber):
+def set_webhook(viber):
+    logger = logging.getLogger()
+    logger.debug('{0} started'.format('WebhookSetter'))
     while True:
         try:
             viber.set_webhook('https://admsg.ru:{}/'.format(PORT))
@@ -113,7 +119,7 @@ def set_webhook(logger, viber):
 
 # --- Processes block START ---
 #
-def process_events(logger, event_queues_dict, subscribers_dict):
+def process_events(event_queues_dict, subscribers_dict):
     """
     Publisher-subscriber pattern implementation.
     
@@ -121,17 +127,20 @@ def process_events(logger, event_queues_dict, subscribers_dict):
     :param event_queues_dict: dictionary with incoming queues of processes.
     :param subscribers_dict: Request class is key and process name is value.
     """
+    logger = init_logger()
+    logger.debug('{0} started'.format(EVENT_PROCESSOR))
     event_handler_queue = event_queues_dict.get(EVENT_PROCESSOR)
     while True:
         event = event_handler_queue.get()
         for class_key, subscribers in subscribers_dict.iteritems():
+            logger.debug('Check event: {0} is instance of : {1}'.format(event, class_key))
             if isinstance(event, class_key):
                 for subscriber in subscribers:
                     logger.debug('Process event: {0} to subscriber: {1}'.format(event, subscriber))
                     event_queues_dict.get(subscriber).put_nowait(event)
 
 
-def maintain_statistics(logger, queue):
+def maintain_statistics(queue):
     """
     Stores statistics.
     
@@ -140,6 +149,8 @@ def maintain_statistics(logger, queue):
     :param viber: Viber API instance.
     """
     # TODO For User Profiles possible to use DBRef
+    logger = init_logger()
+    logger.debug('{0} started'.format(STATS_MAINTAINER))
     client = MongoClient(MONGO_HOST, MONGO_PORT)
     db = client[MONGO_DB]
     while True:
@@ -152,7 +163,7 @@ def init_mongo():
     """
     Init Mongo indexes.
     """
-    logging.debug('Init Mongo')
+    logger.debug('Init Mongo')
     client = MongoClient(MONGO_HOST, MONGO_PORT)
     db = client[MONGO_DB]
     db.events.create_index([('$**', 'text')])
@@ -167,30 +178,27 @@ if __name__ == '__main__':
 
     event_processor = Process(name=EVENT_PROCESSOR,
                               target=process_events,
-                              args=(logger,
-                                    event_queues_dict,
+                              args=(event_queues_dict,
                                     subscribers_dict
                                     ))
     event_processor.start()
-    logger.debug('{0} started'.format(EVENT_PROCESSOR))
 
     stats_maintainer = Process(name=STATS_MAINTAINER,
                                target=maintain_statistics,
-                               args=(logger,
-                                     event_queues_dict.setdefault(STATS_MAINTAINER, Queue())))
+                               args=(event_queues_dict.setdefault(STATS_MAINTAINER, Queue()),))
     # make subscriptions
     subscribers_dict.setdefault(ViberRequest, []).append(STATS_MAINTAINER)
     stats_maintainer.start()
-    logger.debug('{0} started'.format(STATS_MAINTAINER))
 
     # init webhooks
     scheduler = sched.scheduler(time.time, time.sleep)
-    scheduler.enter(5, 1, set_webhook, (logger, viber))
+    scheduler.enter(5, 1, set_webhook, (viber, ))
     t = Process(name='WebhookSetter',
                 target=scheduler.run)
     t.start()
-    logger.debug('{0} started'.format('WebhookSetter'))
 
+    logger.debug('Subscribers: {}'.format(subscribers_dict))
+    logger.debug('Queues: {}'.format(event_queues_dict))
     # REST start
     context = (PATH_TO_CRT, PATH_TO_KEY)
     app.run(host='0.0.0.0', port=PORT, debug=DEBUG, ssl_context=context)
