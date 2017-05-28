@@ -5,7 +5,7 @@ To use multiprocessing loger main process should something like this:
 >>> with open(LOGGER_CONFIG, 'r') as logger_config:
 >>>     config = load(logger_config, Loader=Loader)
 >>>     config_worker = config.get('worker')  # logger config for workers.
->>>     config_worker['queue'] = q
+>>>     config_worker['handlers']['queue']['queue'] = q
 >>>     config_listener = config.get('listener')
 >>> stop_event = Event()
 >>> lp = Process(target=listener_process, name='listener',
@@ -42,7 +42,7 @@ class SimpleHandler:
         logger = logging.getLogger(record.name)
         # The process name is transformed just to show that it's the listener
         # doing the logging to files and console
-        record.processName = '%s (for %s)' % (current_process().name, record.processName)
+        #record.processName = '%s (for %s)' % (current_process().name, record.processName)
         logger.handle(record)
 
 def listener_process(q, stop_event, config):
