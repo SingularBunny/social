@@ -30,9 +30,6 @@ listener:
       'mode': 'w'
       'level': 'ERROR'
       'formatter': 'detailed'
-  'loggers':
-    'foo':
-      'handlers': ['foofile']
   'root':
     'level': 'DEBUG'
     'handlers': ['console', 'file', 'errors']

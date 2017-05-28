@@ -31,9 +31,6 @@ try:
 except ImportError:
     from yaml import Loader, Dumper, load
 
-# config paths
-LOGGER_CONFIG = 'logger_config.yaml'
-
 class SimpleHandler:
     """
     A simple handler for logging events. It runs in the listener process and

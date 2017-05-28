@@ -1,5 +1,6 @@
 import json
 
+import logging
 from pymongo import MongoClient
 
 import pydevd
@@ -7,6 +8,8 @@ from multiprocessing import Process, Queue
 
 from flask import Flask, request, Response
 
+from logging_utils import SimpleHandler
+from logging_utils.handlers import QueueListener
 from viberbot.api import messages
 from viberbot.api.viber_requests import ViberRequest
 
@@ -20,11 +23,19 @@ from viberbot.api.viber_requests import ViberSubscribedRequest
 from viberbot.api.viber_requests import ViberUnsubscribedRequest
 
 import time
-import logging
 import sched
+
+try:
+    from yaml import CLoader as Loader, CDumper as Dumper, load
+except ImportError:
+    from yaml import Loader, Dumper, load
+
 
 # TODO: 1. Tests coverage.
 # TODO: 2. Move configuration to yaml.
+
+# logger
+SIMPLE_LOGGER_CONFIG = 'logging_utils/simple_logger_config.yaml'
 
 # Mongo
 MONGO_PREFIX = 'mongodb://'
@@ -41,17 +52,6 @@ PATH_TO_KEY = 'certificates/server.key'
 # Process names
 EVENT_PROCESSOR = 'EventProcessor'
 STATS_MAINTAINER = 'StatsStorer'
-
-def init_logger():
-    logger = logging.getLogger()
-    logger.setLevel(logging.DEBUG)
-    handler = logging.StreamHandler()
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
-    return logger
-
-logger = init_logger()
 
 app = Flask(__name__)
 viber = Api(BotConfiguration(
@@ -119,7 +119,7 @@ def set_webhook(viber):
 
 # --- Processes block START ---
 #
-def process_events(event_queues_dict, subscribers_dict):
+def process_events(logger_config, event_queues_dict, subscribers_dict):
     """
     Publisher-subscriber pattern implementation.
     
@@ -127,7 +127,8 @@ def process_events(event_queues_dict, subscribers_dict):
     :param event_queues_dict: dictionary with incoming queues of processes.
     :param subscribers_dict: Request class is key and process name is value.
     """
-    logger = init_logger()
+    logging.config.dictConfig(config_worker)
+    logger = logging.getLogger()
     logger.debug('{0} started'.format(EVENT_PROCESSOR))
     event_handler_queue = event_queues_dict.get(EVENT_PROCESSOR)
     while True:
@@ -140,7 +141,7 @@ def process_events(event_queues_dict, subscribers_dict):
                     event_queues_dict.get(subscriber).put_nowait(event)
 
 
-def maintain_statistics(queue):
+def maintain_statistics(logger_config, queue):
     """
     Stores statistics.
     
@@ -149,7 +150,8 @@ def maintain_statistics(queue):
     :param viber: Viber API instance.
     """
     # TODO For User Profiles possible to use DBRef
-    logger = init_logger()
+    logging.config.dictConfig(config_worker)
+    logger = logging.getLogger()
     logger.debug('{0} started'.format(STATS_MAINTAINER))
     client = MongoClient(MONGO_HOST, MONGO_PORT)
     db = client[MONGO_DB]
@@ -174,18 +176,35 @@ if __name__ == '__main__':
     # debug support
     #pydevd.settrace('109.195.27.157', port=5123, stdoutToServer=True, stderrToServer=True, suspend=False)
 
+    # --- init logger START ---
+    logger_queue = Queue()
+    with open(SIMPLE_LOGGER_CONFIG, 'r') as logger_config:
+        config = load(logger_config, Loader=Loader)
+        config_worker = config.get('worker')  # logger config for workers.
+        config_worker['queue'] = logger_queue
+        config_listener = config.get('listener')
+
+    logging.config.dictConfig(config)
+    logger_listener = QueueListener(logger_queue, SimpleHandler())
+    logger_listener.start()
+    logger = logging.getLogger('main')
+    # --- init logger START ---
+
     init_mongo()
 
     event_processor = Process(name=EVENT_PROCESSOR,
                               target=process_events,
-                              args=(event_queues_dict,
+                              args=(config_worker,
+                                    event_queues_dict,
                                     subscribers_dict
                                     ))
     event_processor.start()
 
     stats_maintainer = Process(name=STATS_MAINTAINER,
                                target=maintain_statistics,
-                               args=(event_queues_dict.setdefault(STATS_MAINTAINER, Queue()),))
+                               args=(config_worker,
+                                     event_queues_dict.setdefault(STATS_MAINTAINER, Queue())
+                                     ))
     # make subscriptions
     subscribers_dict.setdefault(ViberRequest, []).append(STATS_MAINTAINER)
     stats_maintainer.start()
@@ -199,6 +218,9 @@ if __name__ == '__main__':
 
     logger.debug('Subscribers: {}'.format(subscribers_dict))
     logger.debug('Queues: {}'.format(event_queues_dict))
+
     # REST start
     context = (PATH_TO_CRT, PATH_TO_KEY)
     app.run(host='0.0.0.0', port=PORT, debug=DEBUG, ssl_context=context)
+
+    logger_listener.stop()
