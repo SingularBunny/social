@@ -1,5 +1,6 @@
 yaml
 flask
 pydevd
-viberbot
 pymongo
+viberbot
+python-telegram-bot
