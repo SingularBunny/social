@@ -8,9 +8,7 @@ from multiprocessing import Process, Queue, Event, current_process
 
 from flask import Flask, request, Response
 
-from flaskrun import flaskrun
 from logging_utils import listener_process
-from viber_bot import make_viber_bot
 
 from viberbot import Api
 from viberbot.api import messages
@@ -36,13 +34,6 @@ except ImportError:
 # logger
 SIMPLE_LOGGER_CONFIG = 'logging_utils/simple_logger_config.yaml'
 
-# Bot
-BOT_NAME = 'PythonBot',
-BOT_AVATAR = 'http://cs9.pikabu.ru/images/big_size_comm/2017-01_7/1485863230198053474.jpg',
-BOT_AUTH_TOKEN = '46035a5801f49064-54a5b815877ccb4d-176654aa2704e14a'
-BOT_WEBHOOK_URL = 'https://admsg.ru:{}/'
-BOT_WEBHOOK_PORT = 8443
-
 # Mongo
 MONGO_PREFIX = 'mongodb://'
 MONGO_HOST = 'localhost'
@@ -50,6 +41,7 @@ MONGO_PORT = 27017
 MONGO_DB = 'viber'
 
 # Application
+PORT = 8443
 DEBUG = True
 PATH_TO_CRT = 'certificates/server.crt'
 PATH_TO_KEY = 'certificates/server.key'
@@ -57,6 +49,13 @@ PATH_TO_KEY = 'certificates/server.key'
 # Process names
 EVENT_PROCESSOR = 'EventProcessor'
 STATS_MAINTAINER = 'StatsStorer'
+
+app = Flask(__name__)
+viber = Api(BotConfiguration(
+    name='PythonBot',
+    avatar='http://cs9.pikabu.ru/images/big_size_comm/2017-01_7/1485863230198053474.jpg',
+    auth_token='46035a5801f49064-54a5b815877ccb4d-176654aa2704e14a'
+))
 
 # dictionary where key is an class of Viber and value is a key from event_queues_dict
 subscribers_dict = {'raw_data': (STATS_MAINTAINER,)}
@@ -66,6 +65,64 @@ event_queues_dict = {EVENT_PROCESSOR: Queue(),
                      STATS_MAINTAINER: Queue()}
 
 
+# --- REST block START ---
+@app.route('/', methods=['POST'])
+def incoming_from_viber():
+    logger.debug('received request. post data: {0}'.format(request.get_data()))
+
+    event_handler_queue = event_queues_dict.get(EVENT_PROCESSOR)
+    event_handler_queue.put_nowait(('raw_data', request.get_data()))
+
+    viber_request = viber.parse_request(request.get_data())
+
+    # --- simple request handling block START ---
+    if isinstance(viber_request, ViberMessageRequest):
+        message = viber_request.message
+        viber.send_messages(viber_request.sender.id, [
+            message
+        ])
+    elif isinstance(viber_request, ViberConversationStartedRequest) \
+            or isinstance(viber_request, ViberSubscribedRequest) \
+            or isinstance(viber_request, ViberUnsubscribedRequest):
+        viber.send_messages(viber_request.user.id, [
+            TextMessage(None, None, viber_request.type)
+        ])
+    elif isinstance(viber_request, ViberFailedRequest):
+        logger.warn('client failed receiving message. failure: {0}'.format(viber_request))
+    # --- simple request handling block END ---
+
+    return Response(status=200)
+
+
+@app.route('/post_message/<string:admin_id>', methods=['POST'])
+def post_message(admin_id):
+    logger.debug('Send message request. post data: {0}'.format(request.get_data()))
+    viber.post(admin_id, messages.get_message(json.loads(request.get_data())))
+    return Response(status=200)
+
+
+@app.route('/account_info', methods=['GET'])
+def account_info():
+    logger.debug('Get account info request.')
+    return json.dumps(viber.get_account_info())
+
+
+def set_webhook(logger_config, viber):
+    logging.config.dictConfig(logger_config)
+    logger = logging.getLogger('Webhook')
+    logger.debug('{0} started'.format('WebhookSetter'))
+    while True:
+        try:
+            viber.set_webhook('https://admsg.ru:{}/'.format(PORT))
+            break
+        except Exception as e:
+            logger.debug(e)
+
+
+# --- REST block END ---
+
+# --- Processes block START ---
+#
 def process_events(logger_config, event_queues_dict, subscribers_dict):
     """
     Publisher-subscriber pattern implementation.
@@ -161,8 +218,17 @@ if __name__ == '__main__':
     stats_maintainer.daemon = True
     stats_maintainer.start()
 
-    app = make_viber_bot(config_worker, event_queues_dict[EVENT_PROCESSOR], BOT_NAME, BOT_AVATAR, BOT_AUTH_TOKEN,
-                         BOT_WEBHOOK_URL.format(BOT_WEBHOOK_PORT))
-    app.webhook_setter.start()
+    # init webhooks
+    scheduler = sched.scheduler(time.time, time.sleep)
+    scheduler.enter(5, 1, set_webhook, (config_worker, viber))
+    t = Process(name='WebhookSetter',
+                target=scheduler.run)
+    t.daemon = True
+    t.start()
 
-    flaskrun(app, default_host='0.0.0.0', default_port=BOT_WEBHOOK_PORT)
+    logger.debug('Subscribers: {}'.format(subscribers_dict))
+    logger.debug('Queues: {}'.format(event_queues_dict))
+
+    # REST start
+    context = (PATH_TO_CRT, PATH_TO_KEY)
+    app.run(host='0.0.0.0', port=PORT, ssl_context=context)
