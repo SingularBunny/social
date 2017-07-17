@@ -3,27 +3,11 @@ import json
 import logging
 from pymongo import MongoClient
 
-import pydevd
-from multiprocessing import Process, Queue, Event, current_process
-
-from flask import Flask, request, Response
+from multiprocessing import Process, Queue, Event
 
 from flaskrun import flaskrun
 from logging_utils import listener_process
 from viber_bot import make_viber_bot
-
-from viberbot import Api
-from viberbot.api import messages
-from viberbot.api.bot_configuration import BotConfiguration
-from viberbot.api.messages.text_message import TextMessage
-from viberbot.api.viber_requests import ViberConversationStartedRequest
-from viberbot.api.viber_requests import ViberFailedRequest
-from viberbot.api.viber_requests import ViberMessageRequest
-from viberbot.api.viber_requests import ViberSubscribedRequest
-from viberbot.api.viber_requests import ViberUnsubscribedRequest
-
-import time
-import sched
 
 try:
     from yaml import CLoader as Loader, CDumper as Dumper, load

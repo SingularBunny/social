@@ -1,14 +1,10 @@
 import json
 
 import logging
-from pymongo import MongoClient
 
-import pydevd
-from multiprocessing import Process, Queue, Event, current_process
+from multiprocessing import Process
 
 from flask import Flask, request, Response, Blueprint
-
-from logging_utils import listener_process
 
 from viberbot import Api
 from viberbot.api import messages
