@@ -7,7 +7,7 @@ from multiprocessing import Process, Queue, Event
 
 from flaskrun import flaskrun
 from logging_utils import listener_process
-from viber_bot import make_viber_bot
+from viber_bot import make_viber_bot_app
 
 try:
     from yaml import CLoader as Loader, CDumper as Dumper, load
@@ -145,7 +145,7 @@ if __name__ == '__main__':
     stats_maintainer.daemon = True
     stats_maintainer.start()
 
-    app = make_viber_bot(config_worker, event_queues_dict[EVENT_PROCESSOR], BOT_NAME, BOT_AVATAR, BOT_AUTH_TOKEN,
+    app = make_viber_bot_app(config_worker, event_queues_dict[EVENT_PROCESSOR], BOT_NAME, BOT_AVATAR, BOT_AUTH_TOKEN,
                          BOT_WEBHOOK_URL.format(BOT_WEBHOOK_PORT))
     app.webhook_setter.start()
 
