@@ -41,6 +41,7 @@ PATH_TO_KEY = 'certificates/server.key'
 # Process names
 EVENT_PROCESSOR = 'EventProcessor'
 STATS_MAINTAINER = 'StatsStorer'
+BOT_RUNNER = 'BotRunner'
 
 # dictionary where key is an class of Viber and value is a key from event_queues_dict
 subscribers_dict = {'raw_data': (STATS_MAINTAINER,)}
@@ -70,11 +71,10 @@ def process_events(logger_config, event_queues_dict, subscribers_dict):
                     logger.debug('Process event: {0} to subscriber: {1}'.format(event, subscriber))
                     event_queues_dict.get(subscriber).put_nowait(event)
 
-
 def maintain_statistics(logger_config, queue):
     """
     Stores statistics.
-    
+
     :param logger_config: logger configuration.
     :param queue: incoming queue.
     """
@@ -89,7 +89,22 @@ def maintain_statistics(logger_config, queue):
         logger.debug('Store event: {0} to Mongo'.format(event))
         db.events.insert_one(json.loads(event))
 
+def run_bots(logger_config, stop_event):
 
+    logging.config.dictConfig(logger_config)
+    logger = logging.getLogger(STATS_MAINTAINER)
+    logger.debug('{0} started'.format(BOT_RUNNER))
+    client = MongoClient(MONGO_HOST, MONGO_PORT)
+    db = client[MONGO_DB]
+    while True:
+        if stop_event.is_set():
+            break
+        app = make_viber_bot_app(config_worker, event_queues_dict[EVENT_PROCESSOR], BOT_NAME, BOT_AVATAR,
+                                 BOT_AUTH_TOKEN,
+                                 BOT_WEBHOOK_URL.format(BOT_WEBHOOK_PORT))
+        app.webhook_setter.start()
+
+        flaskrun(app, default_host='0.0.0.0', default_port=BOT_WEBHOOK_PORT)
 # --- Processes block END ---
 
 def init_mongo():
@@ -145,8 +160,10 @@ if __name__ == '__main__':
     stats_maintainer.daemon = True
     stats_maintainer.start()
 
-    app = make_viber_bot_app(config_worker, event_queues_dict[EVENT_PROCESSOR], BOT_NAME, BOT_AVATAR, BOT_AUTH_TOKEN,
-                         BOT_WEBHOOK_URL.format(BOT_WEBHOOK_PORT))
-    app.webhook_setter.start()
 
-    flaskrun(app, default_host='0.0.0.0', default_port=BOT_WEBHOOK_PORT)
+    bot_runner = Process(name=BOT_RUNNER,
+                         target=run_bots,
+                         args=(config_worker,
+                               stop_event
+                               ))
+    bot_runner.start()
