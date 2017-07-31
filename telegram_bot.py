@@ -45,7 +45,7 @@ def incoming_from_telegram():
 # --- REST block END ---
 
 
-def make_viber_bot_app(logger_config, event_handler_queue, bot_auth_token, url):
+def make_telegram_bot_app(logger_config, event_handler_queue, bot_auth_token, url):
 
     bot = telegram.Bot(token=bot_auth_token)
 

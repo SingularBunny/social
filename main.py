@@ -7,6 +7,7 @@ from multiprocessing import Process, Queue, Event
 
 from flaskrun import flaskrun
 from logging_utils import listener_process
+from telegram_bot import make_telegram_bot_app
 from viber_bot import make_viber_bot_app
 
 try:
@@ -96,15 +97,32 @@ def run_bots(logger_config, stop_event):
     logger.debug('{0} started'.format(BOT_RUNNER))
     client = MongoClient(MONGO_HOST, MONGO_PORT)
     db = client[MONGO_DB]
+
+    bots = {}
+    ports = {}
+
     while True:
         if stop_event.is_set():
             break
-        app = make_viber_bot_app(config_worker, event_queues_dict[EVENT_PROCESSOR], BOT_NAME, BOT_AVATAR,
-                                 BOT_AUTH_TOKEN,
-                                 BOT_WEBHOOK_URL.format(BOT_WEBHOOK_PORT))
-        app.webhook_setter.start()
+        token = BOT_AUTH_TOKEN
+        bot_name = BOT_NAME
+        avatar = BOT_AVATAR
+        port = BOT_WEBHOOK_PORT
+        if token not in bots:
+            # app = make_viber_bot_app(config_worker, event_queues_dict[EVENT_PROCESSOR], bot_name, avatar, token,
+            #                          BOT_WEBHOOK_URL.format(port))
+            app = make_telegram_bot_app(config_worker, event_queues_dict[EVENT_PROCESSOR], token,
+                                        BOT_WEBHOOK_URL.format(port))
+            app.webhook_setter.start()
 
-        flaskrun(app, default_host='0.0.0.0', default_port=BOT_WEBHOOK_PORT)
+            bot = Process(name='',
+                                 target=flaskrun,
+                                 args=(app, '0.0.0.0', port, PATH_TO_CRT, PATH_TO_KEY))
+            bot.daemon = True
+            bot.start()
+            bots[token] = bot
+            port[token] = port
+
 # --- Processes block END ---
 
 def init_mongo():
