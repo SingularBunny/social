@@ -108,26 +108,26 @@ def run_bots(logger_config, stop_event):
             break
 
         # run bots
-        token = BOT_AUTH_TOKEN
-        bot_name = BOT_NAME
-        avatar = BOT_AVATAR
-        port = BOT_WEBHOOK_PORT
-        if token not in apps:
-            # app = make_viber_bot_app(config_worker, event_queues_dict[EVENT_PROCESSOR], bot_name, avatar, token,
-            #                          BOT_WEBHOOK_URL.format(port))
-            bot = make_telegram_bot()
-            bots[token] = bot
-            app = make_telegram_app(config_worker, event_queues_dict[EVENT_PROCESSOR], bot,
-                                    BOT_WEBHOOK_URL.format(port))
-            app.webhook_setter.start()
-
-            app_process = Process(name='',
-                          target=flaskrun,
-                          args=(app, '0.0.0.0', port, PATH_TO_CRT, PATH_TO_KEY))
-            app_process.daemon = True
-            app_process.start()
-            apps[token] = bot
-            port[token] = port
+        # token = BOT_AUTH_TOKEN
+        # bot_name = BOT_NAME
+        # avatar = BOT_AVATAR
+        # port = BOT_WEBHOOK_PORT
+        # if token not in apps:
+        #     # app = make_viber_bot_app(config_worker, event_queues_dict[EVENT_PROCESSOR], bot_name, avatar, token,
+        #     #                          BOT_WEBHOOK_URL.format(port))
+        #     bot = make_telegram_bot()
+        #     bots[token] = bot
+        #     app = make_telegram_app(config_worker, event_queues_dict[EVENT_PROCESSOR], bot,
+        #                             BOT_WEBHOOK_URL.format(port))
+        #     app.webhook_setter.start()
+        #
+        #     app_process = Process(name='',
+        #                   target=flaskrun,
+        #                   args=(app, '0.0.0.0', port, PATH_TO_CRT, PATH_TO_KEY))
+        #     app_process.daemon = True
+        #     app_process.start()
+        #     apps[token] = bot
+        #     port[token] = port
 
         # start campaigns
         for campaign in get_campaigns():
