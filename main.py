@@ -72,6 +72,7 @@ def process_events(logger_config, event_queues_dict, subscribers_dict):
                     logger.debug('Process event: {0} to subscriber: {1}'.format(event, subscriber))
                     event_queues_dict.get(subscriber).put_nowait(event)
 
+
 def maintain_statistics(logger_config, queue):
     """
     Stores statistics.
@@ -90,8 +91,8 @@ def maintain_statistics(logger_config, queue):
         logger.debug('Store event: {0} to Mongo'.format(event))
         db.events.insert_one(json.loads(event))
 
-def run_bots(logger_config, stop_event):
 
+def run_bots(logger_config, stop_event):
     logging.config.dictConfig(logger_config)
     logger = logging.getLogger(STATS_MAINTAINER)
     logger.debug('{0} started'.format(BOT_RUNNER))
@@ -105,6 +106,8 @@ def run_bots(logger_config, stop_event):
     while True:
         if stop_event.is_set():
             break
+
+        # run bots
         token = BOT_AUTH_TOKEN
         bot_name = BOT_NAME
         avatar = BOT_AVATAR
@@ -113,17 +116,26 @@ def run_bots(logger_config, stop_event):
             # app = make_viber_bot_app(config_worker, event_queues_dict[EVENT_PROCESSOR], bot_name, avatar, token,
             #                          BOT_WEBHOOK_URL.format(port))
             bot = make_telegram_bot()
-            app = make_telegram_app(config_worker, event_queues_dict[EVENT_PROCESSOR], token,
+            bots[token] = bot
+            app = make_telegram_app(config_worker, event_queues_dict[EVENT_PROCESSOR], bot,
                                     BOT_WEBHOOK_URL.format(port))
             app.webhook_setter.start()
 
-            bot = Process(name='',
-                                 target=flaskrun,
-                                 args=(app, '0.0.0.0', port, PATH_TO_CRT, PATH_TO_KEY))
-            bot.daemon = True
-            bot.start()
+            app_process = Process(name='',
+                          target=flaskrun,
+                          args=(app, '0.0.0.0', port, PATH_TO_CRT, PATH_TO_KEY))
+            app_process.daemon = True
+            app_process.start()
             apps[token] = bot
             port[token] = port
+
+        # start campaigns
+        for campaign in get_campaigns():
+            pass
+
+def get_campaigns():
+    client = MongoClient(MONGO_HOST, MONGO_PORT)
+
 
 # --- Processes block END ---
 
@@ -179,7 +191,6 @@ if __name__ == '__main__':
                                      ))
     stats_maintainer.daemon = True
     stats_maintainer.start()
-
 
     bot_runner = Process(name=BOT_RUNNER,
                          target=run_bots,
