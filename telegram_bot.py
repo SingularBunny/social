@@ -19,6 +19,7 @@ except ImportError:
 
 telegram_bp = Blueprint('telegram_bp', __name__)
 
+
 # --- REST block START ---
 @telegram_bp.route('/', methods=['POST'])
 def incoming_from_telegram():
@@ -45,8 +46,9 @@ def incoming_from_telegram():
 # --- REST block END ---
 
 
-def make_telegram_bot_app(logger_config, event_handler_queue, bot_auth_token, url):
-
-    bot = telegram.Bot(token=bot_auth_token)
-
+def make_telegram_app(logger_config, event_handler_queue, bot, url):
     return make_bot_app(logger_config, telegram_bp, bot.setWebhook, bot, url, event_handler_queue)
+
+
+def make_telegram_bot(bot_auth_token):
+    return telegram.Bot(token=bot_auth_token)

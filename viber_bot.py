@@ -27,6 +27,7 @@ except ImportError:
 
 viber_bp = Blueprint('viber_bp', __name__)
 
+
 # --- REST block START ---
 @viber_bp.route('/', methods=['POST'])
 def incoming_from_viber():
@@ -68,15 +69,17 @@ def account_info():
     viber_bp.logger.debug('Get account info request.')
     return json.dumps(viber_bp.bot.get_account_info())
 
+
 # --- REST block END ---
 
 
-def make_viber_bot_app(logger_config, event_handler_queue, bot_name, bot_avatar, bot_auth_token, url):
+def make_viber_app(logger_config, event_handler_queue, bot, url):
+    return make_bot_app(logger_config, viber_bp, bot.set_webhook, bot, url, event_handler_queue)
 
-    bot = Api(BotConfiguration(
+
+def make_viber_app(bot_name, bot_avatar, bot_auth_token):
+    return Api(BotConfiguration(
         name=bot_name,
         avatar=bot_avatar,
         auth_token=bot_auth_token
     ))
-
-    return make_bot_app(logger_config, viber_bp, bot.set_webhook, bot, url, event_handler_queue)
