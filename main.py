@@ -30,9 +30,14 @@ BOT_WEBHOOK_PORT = 8443
 
 # Mongo
 MONGO_PREFIX = 'mongodb://'
-MONGO_HOST = 'localhost'
+MONGO_URL_PATTERN = 'mongodb://{}:{}@{}'
+MONGO_HOST = 'admsg.ru'
 MONGO_PORT = 27017
-MONGO_DB = 'viber'
+MONGO_USER = 'admsg'
+MONGO_PASSWORD = 'gfhjkm1lkz2flv0pu'
+MONGO_ADMSG_CONFIG_DB = 'admsg_config'
+MONGO_VIBER_DB = 'admsg_config'
+DB_NAMES = [MONGO_VIBER_DB]
 
 # Application
 DEBUG = True
@@ -85,7 +90,7 @@ def maintain_statistics(logger_config, queue):
     logger = logging.getLogger(STATS_MAINTAINER)
     logger.debug('{0} started'.format(STATS_MAINTAINER))
     client = MongoClient(MONGO_HOST, MONGO_PORT)
-    db = client[MONGO_DB]
+    db = client[MONGO_VIBER_DB]
     while True:
         event = queue.get()
         logger.debug('Store event: {0} to Mongo'.format(event))
@@ -96,8 +101,6 @@ def run_bots(logger_config, stop_event):
     logging.config.dictConfig(logger_config)
     logger = logging.getLogger(STATS_MAINTAINER)
     logger.debug('{0} started'.format(BOT_RUNNER))
-    client = MongoClient(MONGO_HOST, MONGO_PORT)
-    db = client[MONGO_DB]
 
     apps = {}
     bots = {}
@@ -134,7 +137,10 @@ def run_bots(logger_config, stop_event):
             pass
 
 def get_campaigns():
-    client = MongoClient(MONGO_HOST, MONGO_PORT)
+    client = MongoClient(MONGO_URL_PATTERN.format(MONGO_USER, MONGO_PASSWORD, MONGO_HOST))
+    db = client[MONGO_ADMSG_CONFIG_DB]
+    db.CampaignChannels.
+
 
 
 # --- Processes block END ---
@@ -145,9 +151,11 @@ def init_mongo():
     """
     logger.debug('Init Mongo')
     client = MongoClient(MONGO_HOST, MONGO_PORT)
-    db = client[MONGO_DB]
-    db.events.create_index([('$**', 'text')])
-    client.close()
+
+    for db_name in DB_NAMES:
+        db = client[db_name]
+        db.events.create_index([('$**', 'text')])
+        client.close()
 
 
 if __name__ == '__main__':
