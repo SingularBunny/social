@@ -36,7 +36,6 @@ VIBER_BOT_AUTH_TOKEN = '46035a5801f49064-54a5b815877ccb4d-176654aa2704e14a'
 # Telegram Bot
 TELEGRAM_BOT_AUTH_TOKEN = '46035a5801f49064-54a5b815877ccb4d-176654aa2704e14a'
 
-
 # Mongo
 MONGO_PREFIX = 'mongodb://'
 MONGO_URL_PATTERN = 'mongodb://{}:{}@{}'
@@ -119,7 +118,7 @@ def run_bots(logger_config, stop_event):
             break
 
         # run bots
-        id = 'AjhwTEhd11'
+        channel_id = 'AjhwTEhd11'
         token = '435537512:AAEoRhCOg3oW0FgyzxnhC-8bD-WwCoi0D6E'
         chat_id = ''
         port = BOT_WEBHOOK_PORT
@@ -134,16 +133,20 @@ def run_bots(logger_config, stop_event):
             app.webhook_setter.start()
 
             app_process = Process(name='',
-                          target=flaskrun,
-                          args=(app, '0.0.0.0', port, PATH_TO_CRT, PATH_TO_KEY))
+                                  target=flaskrun,
+                                  args=(app, '0.0.0.0', port, PATH_TO_CRT, PATH_TO_KEY))
             app_process.daemon = True
             app_process.start()
             apps[token] = bot
             port[token] = port
 
         # start campaigns
-        for campaign in get_campaigns():
-            pass
+        for campaign in get_campaigns(channel_id):
+            text = campaign['text']
+            campaign_id = campaign['campaign_id']
+            link = campaign['link']
+
+            assert(campaign_id is not None and text is not None and link is not None)
 
 
 def get_campaigns(channel_id):
@@ -159,9 +162,9 @@ def get_campaigns(channel_id):
                        'campaign': {'$substr': ['$channel_campaigns._p_campaign', len('Campaign$'), -1]}}},
          {'$lookup': {'from': 'Campaign', 'localField': 'campaign', 'foreignField': '_id', 'as': 'campaigns'}},
          {'$unwind': '$campaigns'},
-         {'$project': {'name': 1, 'channel': 1, 'text': '$campaigns.text', 'link': '$campaigns.link'}}])
+         {'$project': {'name': 1, 'channel': 1, 'campaign_id': '$campaigns._id', 'text': '$campaigns.text',
+                       'link': '$campaigns.link'}}])
     return list(cur)
-
 
 
 # --- Processes block END ---
