@@ -17,26 +17,34 @@ except ImportError:
 
 # TODO: 1. Tests coverage.
 # TODO: 2. Move configuration to yaml.
+# user_id
+# campaign_id
+# channel_id
 
 # logger
 SIMPLE_LOGGER_CONFIG = 'logging_utils/simple_logger_config.yaml'
 
-# Bot
-BOT_NAME = 'PythonBot',
-BOT_AVATAR = 'http://cs9.pikabu.ru/images/big_size_comm/2017-01_7/1485863230198053474.jpg',
-BOT_AUTH_TOKEN = '46035a5801f49064-54a5b815877ccb4d-176654aa2704e14a'
+# bots
 BOT_WEBHOOK_URL = 'https://admsg.ru:{}/'
 BOT_WEBHOOK_PORT = 8443
+TRACKER_URL_PATTERN = 'http://admsg.ru:8083/tracker?targetUrl={}&channel_id={}&campaign_id={}&user_id={}'
+# Viber Bot
+VIBER_BOT_NAME = 'PythonBot'
+VIBER_BOT_AVATAR = 'http://cs9.pikabu.ru/images/big_size_comm/2017-01_7/1485863230198053474.jpg'
+VIBER_BOT_AUTH_TOKEN = '46035a5801f49064-54a5b815877ccb4d-176654aa2704e14a'
+
+# Telegram Bot
+TELEGRAM_BOT_AUTH_TOKEN = '46035a5801f49064-54a5b815877ccb4d-176654aa2704e14a'
+
 
 # Mongo
 MONGO_PREFIX = 'mongodb://'
 MONGO_URL_PATTERN = 'mongodb://{}:{}@{}'
 MONGO_HOST = 'admsg.ru'
-MONGO_PORT = 27017
 MONGO_USER = 'admsg'
 MONGO_PASSWORD = 'gfhjkm1lkz2flv0pu'
 MONGO_ADMSG_CONFIG_DB = 'admsg_config'
-MONGO_VIBER_DB = 'admsg_config'
+MONGO_VIBER_DB = 'viber'
 DB_NAMES = [MONGO_VIBER_DB]
 
 # Application
@@ -89,7 +97,7 @@ def maintain_statistics(logger_config, queue):
     logging.config.dictConfig(logger_config)
     logger = logging.getLogger(STATS_MAINTAINER)
     logger.debug('{0} started'.format(STATS_MAINTAINER))
-    client = MongoClient(MONGO_HOST, MONGO_PORT)
+    client = MongoClient(MONGO_URL_PATTERN.format(MONGO_USER, MONGO_PASSWORD, MONGO_HOST))
     db = client[MONGO_VIBER_DB]
     while True:
         event = queue.get()
@@ -111,35 +119,48 @@ def run_bots(logger_config, stop_event):
             break
 
         # run bots
-        # token = BOT_AUTH_TOKEN
-        # bot_name = BOT_NAME
-        # avatar = BOT_AVATAR
-        # port = BOT_WEBHOOK_PORT
-        # if token not in apps:
-        #     # app = make_viber_bot_app(config_worker, event_queues_dict[EVENT_PROCESSOR], bot_name, avatar, token,
-        #     #                          BOT_WEBHOOK_URL.format(port))
-        #     bot = make_telegram_bot()
-        #     bots[token] = bot
-        #     app = make_telegram_app(config_worker, event_queues_dict[EVENT_PROCESSOR], bot,
-        #                             BOT_WEBHOOK_URL.format(port))
-        #     app.webhook_setter.start()
-        #
-        #     app_process = Process(name='',
-        #                   target=flaskrun,
-        #                   args=(app, '0.0.0.0', port, PATH_TO_CRT, PATH_TO_KEY))
-        #     app_process.daemon = True
-        #     app_process.start()
-        #     apps[token] = bot
-        #     port[token] = port
+        id = 'AjhwTEhd11'
+        token = '435537512:AAEoRhCOg3oW0FgyzxnhC-8bD-WwCoi0D6E'
+        chat_id = ''
+        port = BOT_WEBHOOK_PORT
+
+        if token not in apps:
+            # app = make_viber_bot_app(config_worker, event_queues_dict[EVENT_PROCESSOR], bot_name, avatar, token,
+            #                          BOT_WEBHOOK_URL.format(port))
+            bot = make_telegram_bot()
+            bots[token] = bot
+            app = make_telegram_app(config_worker, event_queues_dict[EVENT_PROCESSOR], bot,
+                                    BOT_WEBHOOK_URL.format(port))
+            app.webhook_setter.start()
+
+            app_process = Process(name='',
+                          target=flaskrun,
+                          args=(app, '0.0.0.0', port, PATH_TO_CRT, PATH_TO_KEY))
+            app_process.daemon = True
+            app_process.start()
+            apps[token] = bot
+            port[token] = port
 
         # start campaigns
         for campaign in get_campaigns():
             pass
 
-def get_campaigns():
+
+def get_campaigns(channel_id):
     client = MongoClient(MONGO_URL_PATTERN.format(MONGO_USER, MONGO_PASSWORD, MONGO_HOST))
     db = client[MONGO_ADMSG_CONFIG_DB]
-    db.CampaignChannels.
+    cur = db.Channel.aggregate(
+        [{'$match': {'_id': channel_id}},
+         {'$project': {'id': {'$concat': ['Channel$', '$_id']}, 'name': 1}},
+         {'$lookup': {'from': 'CampaignChannels', 'localField': 'id', 'foreignField': '_p_channel',
+                      'as': 'channel_campaigns'}},
+         {'$unwind': '$channel_campaigns'},
+         {'$project': {'name': 1,
+                       'campaign': {'$substr': ['$channel_campaigns._p_campaign', len('Campaign$'), -1]}}},
+         {'$lookup': {'from': 'Campaign', 'localField': 'campaign', 'foreignField': '_id', 'as': 'campaigns'}},
+         {'$unwind': '$campaigns'},
+         {'$project': {'name': 1, 'channel': 1, 'text': '$campaigns.text', 'link': '$campaigns.link'}}])
+    return list(cur)
 
 
 
@@ -150,7 +171,7 @@ def init_mongo():
     Init Mongo indexes.
     """
     logger.debug('Init Mongo')
-    client = MongoClient(MONGO_HOST, MONGO_PORT)
+    client = MongoClient(MONGO_URL_PATTERN.format(MONGO_USER, MONGO_PASSWORD, MONGO_HOST))
 
     for db_name in DB_NAMES:
         db = client[db_name]
