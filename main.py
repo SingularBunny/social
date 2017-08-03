@@ -127,7 +127,7 @@ def run_bots(application_config, stop_event):
             # app = make_viber_bot_app(config_worker, event_queues_dict[EVENT_PROCESSOR], bot_name, avatar, token,
             #                          BOT_WEBHOOK_URL.format(port))
             bot = make_telegram_bot(token)
-            bots[token] = bot
+            bots[channel_id] = bot
 
             app = make_telegram_app(config_worker, event_queues_dict[EVENT_PROCESSOR], bot,
                                     BOT_WEBHOOK_URL.format(port))
@@ -138,8 +138,8 @@ def run_bots(application_config, stop_event):
                                   args=(app, '0.0.0.0', port, PATH_TO_CRT, PATH_TO_KEY))
             app_process.daemon = True
             app_process.start()
-            apps[token] = bot
-            port[token] = port
+            apps[channel_id] = bot
+            ports[channel_id] = port
 
         # start campaigns
         for campaign in get_campaigns(application_config['mongo'], channel_id):
@@ -148,6 +148,10 @@ def run_bots(application_config, stop_event):
             deep_link = make_deep_link(campaign_id)
 
             assert (campaign_id is not None and text is not None)
+
+
+def get_channels(mongo_config):
+    pass
 
 
 # TODO add filter for started campaigns

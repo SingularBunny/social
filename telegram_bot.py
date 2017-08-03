@@ -26,7 +26,7 @@ def incoming_from_telegram():
     telegram_bp.logger.debug('received request. post data: {0}'.format(request.get_data()))
 
     event_handler_queue = telegram_bp.event_handler_queue
-    event_handler_queue.put_nowait(('raw_data', request.get_data()))
+    # TODO uncomment: event_handler_queue.put_nowait(('raw_data', request.get_data()))
     # --- request handling block START ---
     # retrieve the message in JSON and then transform it to Telegram object
     update = telegram_bp.bot.Update.de_json(request.get_json(force=True))
