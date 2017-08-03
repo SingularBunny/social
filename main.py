@@ -51,6 +51,8 @@ DEBUG = True
 PATH_TO_CRT = 'certificates/server.crt'
 PATH_TO_KEY = 'certificates/server.key'
 
+# --- Processes block START ---
+
 # Process names
 EVENT_PROCESSOR = 'EventProcessor'
 STATS_MAINTAINER = 'StatsStorer'
@@ -149,6 +151,7 @@ def run_bots(application_config, stop_event):
 
             assert (campaign_id is not None and text is not None)
 
+# --- Processes block END ---
 
 def get_channels(mongo_config):
     pass
@@ -181,8 +184,6 @@ def make_deep_link(campaign_id):
 def mark_campaign_as_started(campaign_id):
     pass
 
-
-# --- Processes block END ---
 
 def init_mongo():
     """
