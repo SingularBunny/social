@@ -1,0 +1,20 @@
+# application
+debug: true
+loggerConfig: 'logging_utils/simple_logger_config.yaml'
+pathToCrt: 'certificates/server.crt'
+pathToKey: 'certificates/server.key'
+
+# Mongo
+mongo.prefix: 'mongodb://'
+mongo.urlPattern: 'mongodb://{}:{}@{}'
+mongo.host: 'admsg.ru'
+mongo.user: 'admsg'
+mongo.password: 'gfhjkm1lkz2flv0pu'
+mongo.admsgConfigDB: 'admsg_config'
+mongo.viberDB: 'viber'
+mongo.telegramDB: 'viber'
+
+# bots
+bot.webhookUrl: 'https://admsg.ru:{}/'
+bot.webhookPort: 8443
+bot.trackerUrlPattern: 'http://admsg.ru:8083/tracker?targeturl={}&channel_id={}&campaign_id={}&user_id={}'

@@ -128,6 +128,7 @@ def run_bots(logger_config, stop_event):
             #                          BOT_WEBHOOK_URL.format(port))
             bot = make_telegram_bot()
             bots[token] = bot
+
             app = make_telegram_app(config_worker, event_queues_dict[EVENT_PROCESSOR], bot,
                                     BOT_WEBHOOK_URL.format(port))
             app.webhook_setter.start()
@@ -144,11 +145,11 @@ def run_bots(logger_config, stop_event):
         for campaign in get_campaigns(channel_id):
             text = campaign['text']
             campaign_id = campaign['campaign_id']
-            link = campaign['link']
+            deep_link = make_deep_link(campaign_id)
 
-            assert(campaign_id is not None and text is not None and link is not None)
+            assert(campaign_id is not None and text is not None)
 
-
+# TODO add filter for started campaigns
 def get_campaigns(channel_id):
     client = MongoClient(MONGO_URL_PATTERN.format(MONGO_USER, MONGO_PASSWORD, MONGO_HOST))
     db = client[MONGO_ADMSG_CONFIG_DB]
@@ -166,6 +167,11 @@ def get_campaigns(channel_id):
                        'link': '$campaigns.link'}}])
     return list(cur)
 
+def make_deep_link(campaign_id):
+    pass
+
+def mark_campaign_as_started(campaign_id):
+    pass
 
 # --- Processes block END ---
 
