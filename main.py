@@ -104,8 +104,8 @@ def maintain_statistics(logger_config, queue):
         db.events.insert_one(json.loads(event))
 
 
-def run_bots(logger_config, stop_event):
-    logging.config.dictConfig(logger_config)
+def run_bots(application_config, stop_event):
+    logging.config.dictConfig(application_config['loggerConfig'])
     logger = logging.getLogger(STATS_MAINTAINER)
     logger.debug('{0} started'.format(BOT_RUNNER))
 
@@ -126,7 +126,7 @@ def run_bots(logger_config, stop_event):
         if token not in apps:
             # app = make_viber_bot_app(config_worker, event_queues_dict[EVENT_PROCESSOR], bot_name, avatar, token,
             #                          BOT_WEBHOOK_URL.format(port))
-            bot = make_telegram_bot()
+            bot = make_telegram_bot(token)
             bots[token] = bot
 
             app = make_telegram_app(config_worker, event_queues_dict[EVENT_PROCESSOR], bot,
@@ -142,17 +142,19 @@ def run_bots(logger_config, stop_event):
             port[token] = port
 
         # start campaigns
-        for campaign in get_campaigns(channel_id):
+        for campaign in get_campaigns(application_config['mongo'], channel_id):
             text = campaign['text']
             campaign_id = campaign['campaign_id']
             deep_link = make_deep_link(campaign_id)
 
-            assert(campaign_id is not None and text is not None)
+            assert (campaign_id is not None and text is not None)
+
 
 # TODO add filter for started campaigns
-def get_campaigns(channel_id):
-    client = MongoClient(MONGO_URL_PATTERN.format(MONGO_USER, MONGO_PASSWORD, MONGO_HOST))
-    db = client[MONGO_ADMSG_CONFIG_DB]
+def get_campaigns(mongo_config, channel_id):
+    client = MongoClient(
+        mongo_config['urlPattern'].format(mongo_config['user'], mongo_config['password'], mongo_config['host']))
+    db = client[mongo_config['admsgConfigDB']]
     cur = db.Channel.aggregate(
         [{'$match': {'_id': channel_id}},
          {'$project': {'id': {'$concat': ['Channel$', '$_id']}, 'name': 1}},
@@ -167,11 +169,14 @@ def get_campaigns(channel_id):
                        'link': '$campaigns.link'}}])
     return list(cur)
 
+
 def make_deep_link(campaign_id):
     pass
 
+
 def mark_campaign_as_started(campaign_id):
     pass
+
 
 # --- Processes block END ---
 
@@ -193,12 +198,15 @@ if __name__ == '__main__':
     # pydevd.settrace('109.195.27.157', port=5123, stdoutToServer=True, stderrToServer=True, suspend=False)
 
     # --- init logger START ---
+    with open('configuration/config.yaml', 'r') as confFile:
+        config = load(confFile, Loader=Loader)
+
     logger_queue = Queue()
-    with open(SIMPLE_LOGGER_CONFIG, 'r') as logger_config:
-        config = load(logger_config, Loader=Loader)
-        config_worker = config.get('worker')  # logger config for workers.
+    with open(config['loggerConfig'], 'r') as logger_config:
+        logger_config = load(logger_config, Loader=Loader)
+        config_worker = logger_config['worker']  # logger config for workers.
         config_worker['handlers']['queue']['queue'] = logger_queue
-        config_listener = config.get('listener')
+        config_listener = logger_config['listener']
 
     stop_event = Event()
     lp = Process(target=listener_process,
