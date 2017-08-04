@@ -1,6 +1,7 @@
 import json
 
 import logging
+from base64 import urlsafe_b64encode
 
 from multiprocessing import Process
 
@@ -52,3 +53,7 @@ def make_telegram_app(logger_config, event_handler_queue, bot, url):
 
 def make_telegram_bot(bot_auth_token):
     return telegram.Bot(token=bot_auth_token)
+
+def make_telegram_deep_link(deeplink_pattern, bot_id, channel_id, campaign_id):
+    info = json.dumps({'channel_id': channel_id, 'campaign_id':campaign_id})
+    return deeplink_pattern.format(bot_id, urlsafe_b64encode(info))

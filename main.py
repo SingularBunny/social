@@ -7,8 +7,8 @@ from multiprocessing import Process, Queue, Event
 
 from flaskrun import flaskrun
 from logging_utils import listener_process
-from telegram_bot import make_telegram_app, make_telegram_bot
-from viber_bot import make_viber_app
+from telegram_bot import make_telegram_app, make_telegram_bot, make_telegram_deep_link
+from viber_bot import make_viber_app, make_viber_deep_link
 
 try:
     from yaml import CLoader as Loader, CDumper as Dumper, load
@@ -20,36 +20,6 @@ except ImportError:
 # user_id
 # campaign_id
 # channel_id
-
-# logger
-SIMPLE_LOGGER_CONFIG = 'logging_utils/simple_logger_config.yaml'
-
-# bots
-BOT_WEBHOOK_URL = 'https://admsg.ru:{}/'
-BOT_WEBHOOK_PORT = 8443
-TRACKER_URL_PATTERN = 'http://admsg.ru:8083/tracker?targetUrl={}&channel_id={}&campaign_id={}&user_id={}'
-# Viber Bot
-VIBER_BOT_NAME = 'PythonBot'
-VIBER_BOT_AVATAR = 'http://cs9.pikabu.ru/images/big_size_comm/2017-01_7/1485863230198053474.jpg'
-VIBER_BOT_AUTH_TOKEN = '46035a5801f49064-54a5b815877ccb4d-176654aa2704e14a'
-
-# Telegram Bot
-TELEGRAM_BOT_AUTH_TOKEN = '46035a5801f49064-54a5b815877ccb4d-176654aa2704e14a'
-
-# Mongo
-MONGO_PREFIX = 'mongodb://'
-MONGO_URL_PATTERN = 'mongodb://{}:{}@{}'
-MONGO_HOST = 'admsg.ru'
-MONGO_USER = 'admsg'
-MONGO_PASSWORD = 'gfhjkm1lkz2flv0pu'
-MONGO_ADMSG_CONFIG_DB = 'admsg_config'
-MONGO_VIBER_DB = 'viber'
-DB_NAMES = [MONGO_VIBER_DB]
-
-# Application
-DEBUG = True
-PATH_TO_CRT = 'certificates/server.crt'
-PATH_TO_KEY = 'certificates/server.key'
 
 # --- Processes block START ---
 
@@ -65,6 +35,8 @@ subscribers_dict = {'raw_data': (STATS_MAINTAINER,)}
 event_queues_dict = {EVENT_PROCESSOR: Queue(),
                      STATS_MAINTAINER: Queue()}
 
+CHANNEL_TYPE_VIBER = 'viber'
+CHANNEL_TYPE_TELEGRAM ='telegram'
 
 def process_events(logger_config, event_queues_dict, subscribers_dict):
     """
@@ -87,7 +59,7 @@ def process_events(logger_config, event_queues_dict, subscribers_dict):
                     event_queues_dict.get(subscriber).put_nowait(event)
 
 
-def maintain_statistics(logger_config, queue):
+def maintain_statistics(config, queue):
     """
     Stores statistics.
 
@@ -95,19 +67,27 @@ def maintain_statistics(logger_config, queue):
     :param queue: incoming queue.
     """
     # TODO For User Profiles possible to use DBRef
+    logger_config = config['loggerConfig']
+    mongo_config = config['mongo']
+
     logging.config.dictConfig(logger_config)
     logger = logging.getLogger(STATS_MAINTAINER)
     logger.debug('{0} started'.format(STATS_MAINTAINER))
-    client = MongoClient(MONGO_URL_PATTERN.format(MONGO_USER, MONGO_PASSWORD, MONGO_HOST))
-    db = client[MONGO_VIBER_DB]
+    client = MongoClient(mongo_config['urlPattern'].format(mongo_config['user'], mongo_config['password'], mongo_config['host']))
+    db = client[mongo_config['bot']['db']]
     while True:
-        event = queue.get()
+        collection, event = queue.get()
         logger.debug('Store event: {0} to Mongo'.format(event))
-        db.events.insert_one(json.loads(event))
+        db[collection].insert_one(json.loads(event))
+    client.close()
 
 
-def run_bots(application_config, stop_event):
-    logging.config.dictConfig(application_config['loggerConfig'])
+def run_bots(config, stop_event):
+    logger_config = config['loggerConfig']
+    mongo_config = config['mongo']
+    bot_config = config['bot']
+
+    logging.config.dictConfig(config['logger_config'])
     logger = logging.getLogger(STATS_MAINTAINER)
     logger.debug('{0} started'.format(BOT_RUNNER))
 
@@ -122,8 +102,9 @@ def run_bots(application_config, stop_event):
         # run bots
         channel_id = 'AjhwTEhd11'
         token = '435537512:AAEoRhCOg3oW0FgyzxnhC-8bD-WwCoi0D6E'
-        chat_id = ''
-        port = BOT_WEBHOOK_PORT
+        chat_id = 'cannabusiness'
+        port = 8443
+        channel_type = 'telegram'
 
         if token not in apps:
             # app = make_viber_bot_app(config_worker, event_queues_dict[EVENT_PROCESSOR], bot_name, avatar, token,
@@ -132,24 +113,28 @@ def run_bots(application_config, stop_event):
             bots[channel_id] = bot
 
             app = make_telegram_app(config_worker, event_queues_dict[EVENT_PROCESSOR], bot,
-                                    BOT_WEBHOOK_URL.format(port))
+                                    bot_config['webhookUrl'].format(port))
             app.webhook_setter.start()
 
             app_process = Process(name='',
                                   target=flaskrun,
-                                  args=(app, '0.0.0.0', port, PATH_TO_CRT, PATH_TO_KEY))
+                                  args=(app, '0.0.0.0', port, config['pathToCrt'], config['pathToKey']))
             app_process.daemon = True
             app_process.start()
             apps[channel_id] = bot
             ports[channel_id] = port
 
         # start campaigns
-        for campaign in get_campaigns(application_config['mongo'], channel_id):
+        for campaign in get_campaigns(mongo_config, channel_id):
             text = campaign['text']
             campaign_id = campaign['campaign_id']
-            deep_link = make_deep_link(campaign_id)
+            deep_link = make_telegram_deep_link(bot_config['deeplink']['telegram'], channel_id, campaign_id) \
+                if channel_type == CHANNEL_TYPE_TELEGRAM \
+                else make_viber_deep_link if channel_type == CHANNEL_TYPE_VIBER else None
 
             assert (campaign_id is not None and text is not None)
+
+            bots[channel_id].send_message(chat_id=chat_id, text=text + deep_link)
 
 # --- Processes block END ---
 
@@ -164,6 +149,7 @@ def get_campaigns(mongo_config, channel_id):
     db = client[mongo_config['admsgConfigDB']]
     cur = db.Channel.aggregate(
         [{'$match': {'_id': channel_id}},
+         {'$not': {'$match': {'status': 'started'}}},
          {'$project': {'id': {'$concat': ['Channel$', '$_id']}, 'name': 1}},
          {'$lookup': {'from': 'CampaignChannels', 'localField': 'id', 'foreignField': '_p_channel',
                       'as': 'channel_campaigns'}},
@@ -174,27 +160,26 @@ def get_campaigns(mongo_config, channel_id):
          {'$unwind': '$campaigns'},
          {'$project': {'name': 1, 'channel': 1, 'campaign_id': '$campaigns._id', 'text': '$campaigns.text',
                        'link': '$campaigns.link'}}])
+    client.close()
     return list(cur)
 
 
-def make_deep_link(campaign_id):
-    pass
+def mark_campaign_as_started(mongo_config, campaign_id):
+    client = MongoClient(
+        mongo_config['urlPattern'].format(mongo_config['user'], mongo_config['password'], mongo_config['host']))
+    db = client[mongo_config['admsgConfigDB']]
+    db.Campaign.update({'_id': 1}, {'$set': {'status': 'started'}})
 
 
-def mark_campaign_as_started(campaign_id):
-    pass
-
-
-def init_mongo():
+def init_mongo(mongo_config):
     """
     Init Mongo indexes.
     """
     logger.debug('Init Mongo')
-    client = MongoClient(MONGO_URL_PATTERN.format(MONGO_USER, MONGO_PASSWORD, MONGO_HOST))
-
-    for db_name in DB_NAMES:
-        db = client[db_name]
-        db.events.create_index([('$**', 'text')])
+    client = MongoClient(mongo_config['urlPattern'].format(mongo_config['user'], mongo_config['password'], mongo_config['host']))
+    db = client[mongo_config['bot']['db']]
+    for collection in mongo_config['bot']['collection'].keys():
+        db[mongo_config['bot']['collection'][collection]].create_index([('$**', 'text')])
         client.close()
 
 
@@ -209,9 +194,11 @@ if __name__ == '__main__':
     logger_queue = Queue()
     with open(config['loggerConfig'], 'r') as logger_config:
         logger_config = load(logger_config, Loader=Loader)
-        config_worker = logger_config['worker']  # logger config for workers.
-        config_worker['handlers']['queue']['queue'] = logger_queue
-        config_listener = logger_config['listener']
+
+    config_worker = logger_config['worker']  # logger config for workers.
+    config_worker['handlers']['queue']['queue'] = logger_queue
+    config_listener = logger_config['listener']
+    config['loggerConfig'] = config_worker
 
     stop_event = Event()
     lp = Process(target=listener_process,

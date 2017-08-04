@@ -83,3 +83,6 @@ def make_viber_app(bot_name, bot_avatar, bot_auth_token):
         avatar=bot_avatar,
         auth_token=bot_auth_token
     ))
+
+def make_viber_deep_link():
+    pass

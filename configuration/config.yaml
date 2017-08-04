@@ -11,10 +11,12 @@ mongo.host: 'admsg.ru'
 mongo.user: 'admsg'
 mongo.password: 'gfhjkm1lkz2flv0pu'
 mongo.admsgConfigDB: 'admsg_config'
-mongo.viberDB: 'viber'
-mongo.telegramDB: 'viber'
+mongo.bot.db: 'bot'
+mongo.bot.collection.viber: 'viber'
+mongo.bot.collection.telegram: 'telegram'
 
 # bots
 bot.webhookUrl: 'https://admsg.ru:{}/'
-bot.webhookPort: 8443
+bot.deeplink.telegram: 'https://telegram.me/{}?start={}'
+bot.deeplink.viber: 'https://telegram.me/{}?start={}'
 bot.trackerUrlPattern: 'http://admsg.ru:8083/tracker?targeturl={}&channel_id={}&campaign_id={}&user_id={}'
