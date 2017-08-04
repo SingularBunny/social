@@ -5,18 +5,23 @@ pathToCrt: 'certificates/server.crt'
 pathToKey: 'certificates/server.key'
 
 # Mongo
-mongo.prefix: 'mongodb://'
-mongo.urlPattern: 'mongodb://{}:{}@{}'
-mongo.host: 'admsg.ru'
-mongo.user: 'admsg'
-mongo.password: 'gfhjkm1lkz2flv0pu'
-mongo.admsgConfigDB: 'admsg_config'
-mongo.bot.db: 'bot'
-mongo.bot.collection.viber: 'viber'
-mongo.bot.collection.telegram: 'telegram'
+mongo:
+  prefix: 'mongodb://'
+  urlPattern: 'mongodb://{}:{}@{}'
+  host: 'admsg.ru'
+  user: 'admsg'
+  password: 'gfhjkm1lkz2flv0pu'
+  admsgConfigDB: 'admsg_config'
+  bot:
+    db: 'bot'
+    collection:
+      viber: 'viber'
+      telegram: 'telegram'
 
 # bots
-bot.webhookUrl: 'https://admsg.ru:{}/'
-bot.deeplink.telegram: 'https://telegram.me/{}?start={}'
-bot.deeplink.viber: 'https://telegram.me/{}?start={}'
-bot.trackerUrlPattern: 'http://admsg.ru:8083/tracker?targeturl={}&channel_id={}&campaign_id={}&user_id={}'
+bot:
+  webhookUrl: 'https://admsg.ru:{}/'
+  deeplink:
+    telegram: 'https://telegram.me/{}?start={}'
+    viber: 'https://telegram.me/{}?start={}'
+  trackerUrlPattern: 'http://admsg.ru:8083/tracker?targeturl={}&channel_id={}&campaign_id={}&user_id={}'

@@ -87,7 +87,7 @@ def run_bots(config, stop_event):
     mongo_config = config['mongo']
     bot_config = config['bot']
 
-    logging.config.dictConfig(config['logger_config'])
+    logging.config.dictConfig(logger_config)
     logger = logging.getLogger(STATS_MAINTAINER)
     logger.debug('{0} started'.format(BOT_RUNNER))
 
@@ -102,7 +102,7 @@ def run_bots(config, stop_event):
         # run bots
         channel_id = 'AjhwTEhd11'
         token = '435537512:AAEoRhCOg3oW0FgyzxnhC-8bD-WwCoi0D6E'
-        chat_id = 'cannabusiness'
+        chat_id = '@cannabusiness'
         port = 8443
         channel_type = 'telegram'
 
@@ -128,7 +128,10 @@ def run_bots(config, stop_event):
         for campaign in get_campaigns(mongo_config, channel_id):
             text = campaign['text']
             campaign_id = campaign['campaign_id']
-            deep_link = make_telegram_deep_link(bot_config['deeplink']['telegram'], channel_id, campaign_id) \
+            deep_link = make_telegram_deep_link(bot_config['deeplink']['telegram'],
+                                                bot.username,
+                                                channel_id,
+                                                campaign_id) \
                 if channel_type == CHANNEL_TYPE_TELEGRAM \
                 else make_viber_deep_link if channel_type == CHANNEL_TYPE_VIBER else None
 
@@ -211,7 +214,7 @@ if __name__ == '__main__':
     logger = logging.getLogger()
     # --- init logger START ---
 
-    init_mongo()
+    #init_mongo(config['mongo'])
 
     event_processor = Process(name=EVENT_PROCESSOR,
                               target=process_events,
@@ -232,7 +235,7 @@ if __name__ == '__main__':
 
     bot_runner = Process(name=BOT_RUNNER,
                          target=run_bots,
-                         args=(config_worker,
+                         args=(config,
                                stop_event
                                ))
     bot_runner.start()
