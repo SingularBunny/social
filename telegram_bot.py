@@ -1,7 +1,7 @@
 import json
 
 import logging
-from base64 import urlsafe_b64encode
+from base64 import urlsafe_b64encode, b32encode, b16encode
 
 from multiprocessing import Process
 
@@ -30,17 +30,15 @@ def incoming_from_telegram():
     # TODO uncomment: event_handler_queue.put_nowait(('raw_data', request.get_data()))
     # --- request handling block START ---
     # retrieve the message in JSON and then transform it to Telegram object
-    update = telegram_bp.bot.Update.de_json(request.get_json(force=True))
+    update = telegram.Update.de_json(request.get_json(force=True), telegram_bp.bot)
 
-    print update
-
-    chat_id = update.message.chat.id
+    # chat_id = update.message.chat_id
 
     # Telegram understands UTF-8, so encode text for unicode compatibility
-    text = update.message.text.encode('utf-8')
+    # text = update.message.text.encode('utf-8')
 
     # repeat the same message back (echo)
-    telegram_bp.bot.sendMessage(chat_id=chat_id, text=text)
+    # telegram_bp.bot.sendMessage(chat_id=chat_id, text=text)
     # --- simple request handling block END ---
 
     return Response(status=200)
@@ -57,5 +55,4 @@ def make_telegram_bot(bot_auth_token):
     return telegram.Bot(token=bot_auth_token)
 
 def make_telegram_deep_link(deeplink_pattern, bot_id, channel_id, campaign_id):
-    info = json.dumps({'channel_id': channel_id, 'campaign_id':campaign_id})
-    return deeplink_pattern.format(bot_id, urlsafe_b64encode(info))
+    return deeplink_pattern.format(bot_id, urlsafe_b64encode(channel_id + ';' + campaign_id))

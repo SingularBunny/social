@@ -1,6 +1,8 @@
 import json
 
 import logging
+
+import time
 from pymongo import MongoClient
 
 from multiprocessing import Process, Queue, Event
@@ -95,49 +97,53 @@ def run_bots(config, stop_event):
     bots = {}
     ports = {}
 
+    flag = True
     while True:
         if stop_event.is_set():
             break
 
-        # run bots
-        channel_id = 'AjhwTEhd11'
-        token = '435537512:AAEoRhCOg3oW0FgyzxnhC-8bD-WwCoi0D6E'
-        chat_id = '@cannabusiness'
-        port = 8443
-        channel_type = 'telegram'
+        if flag:
+            # run bots
+            channel_id = 'AjhwTEhd11'
+            token = '435537512:AAEoRhCOg3oW0FgyzxnhC-8bD-WwCoi0D6E'
+            chat_id = '@cannabusiness'
+            port = 8443
+            channel_type = 'telegram'
 
-        if token not in apps:
-            # app = make_viber_bot_app(config_worker, event_queues_dict[EVENT_PROCESSOR], bot_name, avatar, token,
-            #                          BOT_WEBHOOK_URL.format(port))
-            bot = make_telegram_bot(token)
-            bots[channel_id] = bot
+            if token not in apps:
+                # app = make_viber_bot_app(config_worker, event_queues_dict[EVENT_PROCESSOR], bot_name, avatar, token,
+                #                          BOT_WEBHOOK_URL.format(port))
+                bot = make_telegram_bot(token)
+                bots[channel_id] = bot
 
-            app = make_telegram_app(config_worker, event_queues_dict[EVENT_PROCESSOR], bot,
-                                    bot_config['webhookUrl'].format(port))
-            app.webhook_setter.start()
+                app = make_telegram_app(config_worker, event_queues_dict[EVENT_PROCESSOR], bot,
+                                        bot_config['webhookUrl'].format(port))
+                app.webhook_setter.start()
 
-            app_process = Process(name='',
-                                  target=flaskrun,
-                                  args=(app, '0.0.0.0', port, config['pathToCrt'], config['pathToKey']))
-            app_process.daemon = True
-            app_process.start()
-            apps[channel_id] = bot
-            ports[channel_id] = port
+                app_process = Process(name='',
+                                      target=flaskrun,
+                                      args=(app, '0.0.0.0', port, config['pathToCrt'], config['pathToKey']))
+                app_process.daemon = True
+                app_process.start()
+                apps[channel_id] = bot
+                ports[channel_id] = port
 
-        # start campaigns
-        for campaign in get_campaigns(mongo_config, channel_id):
-            text = campaign['text']
-            campaign_id = campaign['campaign_id']
-            deep_link = make_telegram_deep_link(bot_config['deeplink']['telegram'],
-                                                bot.username,
-                                                channel_id,
-                                                campaign_id) \
-                if channel_type == CHANNEL_TYPE_TELEGRAM \
-                else make_viber_deep_link if channel_type == CHANNEL_TYPE_VIBER else None
+            # start campaigns
+            for campaign in get_campaigns(mongo_config, channel_id):
+                text = campaign['text']
+                campaign_id = campaign['campaign_id']
+                deep_link = make_telegram_deep_link(bot_config['deeplink']['telegram'],
+                                                    bot.username,
+                                                    channel_id,
+                                                    campaign_id) \
+                    if channel_type == CHANNEL_TYPE_TELEGRAM \
+                    else make_viber_deep_link if channel_type == CHANNEL_TYPE_VIBER else None
 
-            assert (campaign_id is not None and text is not None)
+                assert (campaign_id is not None and text is not None)
 
-            bots[channel_id].send_message(chat_id=chat_id, text=text + deep_link)
+                bots[channel_id].send_message(chat_id=chat_id, text=text+' '+deep_link)
+            flag = False
+            time.sleep(30)
 
 # --- Processes block END ---
 
@@ -152,7 +158,7 @@ def get_campaigns(mongo_config, channel_id):
     db = client[mongo_config['admsgConfigDB']]
     cur = db.Channel.aggregate(
         [{'$match': {'_id': channel_id}},
-         {'$not': {'$match': {'status': 'started'}}},
+         {'$match': {'status': {'$ne': 'started'}}},
          {'$project': {'id': {'$concat': ['Channel$', '$_id']}, 'name': 1}},
          {'$lookup': {'from': 'CampaignChannels', 'localField': 'id', 'foreignField': '_p_channel',
                       'as': 'channel_campaigns'}},
@@ -171,7 +177,8 @@ def mark_campaign_as_started(mongo_config, campaign_id):
     client = MongoClient(
         mongo_config['urlPattern'].format(mongo_config['user'], mongo_config['password'], mongo_config['host']))
     db = client[mongo_config['admsgConfigDB']]
-    db.Campaign.update({'_id': 1}, {'$set': {'status': 'started'}})
+    db.Campaign.update({'_id': campaign_id}, {'$set': {'status': 'started'}})
+    client.close()
 
 
 def init_mongo(mongo_config):
@@ -212,6 +219,7 @@ if __name__ == '__main__':
 
     logging.config.dictConfig(config_worker)
     logger = logging.getLogger()
+    logger.debug('hello')
     # --- init logger START ---
 
     #init_mongo(config['mongo'])
@@ -222,15 +230,13 @@ if __name__ == '__main__':
                                     event_queues_dict,
                                     subscribers_dict
                                     ))
-    event_processor.daemon = True
     event_processor.start()
 
     stats_maintainer = Process(name=STATS_MAINTAINER,
                                target=maintain_statistics,
-                               args=(config_worker,
+                               args=(config,
                                      event_queues_dict.get(STATS_MAINTAINER)
                                      ))
-    stats_maintainer.daemon = True
     stats_maintainer.start()
 
     bot_runner = Process(name=BOT_RUNNER,
@@ -239,3 +245,4 @@ if __name__ == '__main__':
                                stop_event
                                ))
     bot_runner.start()
+    bot_runner.join()
