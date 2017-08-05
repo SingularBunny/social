@@ -20,7 +20,7 @@ def set_webhook(logger_config, set_webhook, url):
 def make_bot_app(logger_config, bot_blueprint, set_webhook_method, bot, url, event_handler_queue):
 
     logging.config.dictConfig(logger_config)
-    logger = logging.getLogger()
+    logger = logging.getLogger(__name__)
 
     app = Flask(__name__)
     app.register_blueprint(bot_blueprint)
@@ -32,7 +32,7 @@ def make_bot_app(logger_config, bot_blueprint, set_webhook_method, bot, url, eve
                 target=scheduler.run)
     webhook_setter.daemon = True
 
-    app.logger = logger
+    app._logger = logger
     app.webhook_setter = webhook_setter
 
     bot_blueprint.logger = logger
