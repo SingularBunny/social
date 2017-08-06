@@ -1,12 +1,13 @@
 import json
 
 import logging
-from base64 import urlsafe_b64encode, b32encode, b16encode
+from base64 import urlsafe_b64encode, b32encode, b16encode, urlsafe_b64decode
 
 from multiprocessing import Process
 
 import telegram
 from flask import Flask, request, Response, Blueprint
+from pymongo import MongoClient
 
 from bot_utils import set_webhook, make_bot_app
 
@@ -32,14 +33,32 @@ def incoming_from_telegram():
     # retrieve the message in JSON and then transform it to Telegram object
     update = telegram.Update.de_json(request.get_json(force=True), telegram_bp.bot)
 
-    # chat_id = update.message.chat_id
+    if hasattr(update, 'message'):
+        chat_id = update.message.chat_id
 
-    # Telegram understands UTF-8, so encode text for unicode compatibility
-    # text = update.message.text.encode('utf-8')
+        if '/start' in update.message.text:
+            mongo_config = telegram_bp.config['mongoConfig']
+            client = MongoClient(
+                mongo_config['urlPattern'].format(mongo_config['user'], mongo_config['password'], mongo_config['host']))
+            db = client[mongo_config['admsgConfigDB']]
 
-    # repeat the same message back (echo)
-    # telegram_bp.bot.sendMessage(chat_id=chat_id, text=text)
-    # --- simple request handling block END ---
+            channel_id, campaign_id = urlsafe_b64decode(update.message.text.replace('/start ', '')).split(';')
+            campaign = db.Campaign.find({'_id': campaign_id})
+            link = campaign.link
+            text = campaign.text + ' ' + \
+                   telegram_bp.config['bot']['trackerUrlPattern'] \
+                       .format(urlsafe_b64encode(link),
+                               urlsafe_b64encode(channel_id),
+                               urlsafe_b64encode(campaign_id),
+                               urlsafe_b64encode(update.message.from_user.id))
+
+            # Telegram understands UTF-8, so encode text for unicode compatibility
+
+
+            # repeat the same message back (echo)
+            telegram_bp.bot.sendMessage(chat_id=chat_id, text=text.encode('utf-8'))
+            client.close()
+            # --- simple request handling block END ---
 
     return Response(status=200)
 
@@ -47,12 +66,13 @@ def incoming_from_telegram():
 # --- REST block END ---
 
 
-def make_telegram_app(logger_config, event_handler_queue, bot, url):
-    return make_bot_app(logger_config, telegram_bp, bot.setWebhook, bot, url, event_handler_queue)
+def make_telegram_app(config, event_handler_queue, bot, url):
+    return make_bot_app(config, telegram_bp, bot.setWebhook, bot, url, event_handler_queue)
 
 
 def make_telegram_bot(bot_auth_token):
     return telegram.Bot(token=bot_auth_token)
+
 
 def make_telegram_deep_link(deeplink_pattern, bot_id, channel_id, campaign_id):
     return deeplink_pattern.format(bot_id, urlsafe_b64encode(channel_id + ';' + campaign_id))

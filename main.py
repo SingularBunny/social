@@ -116,7 +116,7 @@ def run_bots(config, stop_event):
                 bot = make_telegram_bot(token)
                 bots[channel_id] = bot
 
-                app = make_telegram_app(config_worker, event_queues_dict[EVENT_PROCESSOR], bot,
+                app = make_telegram_app(config, event_queues_dict[EVENT_PROCESSOR], bot,
                                         bot_config['webhookUrl'].format(port))
                 app.webhook_setter.start()
 
@@ -141,7 +141,9 @@ def run_bots(config, stop_event):
 
                 assert (campaign_id is not None and text is not None)
 
-                bots[channel_id].send_message(chat_id=chat_id, text=text+' '+deep_link)
+                text += ' ' + deep_link
+
+                bots[channel_id].send_message(chat_id=chat_id, text=text.encode('utf-8'))
             flag = False
             time.sleep(30)
 
