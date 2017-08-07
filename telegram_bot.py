@@ -1,6 +1,7 @@
 import json
 
 import logging
+import urllib
 from base64 import urlsafe_b64encode, b32encode, b16encode, urlsafe_b64decode
 
 from multiprocessing import Process
@@ -28,7 +29,7 @@ def incoming_from_telegram():
     telegram_bp.logger.debug('received request. post data: {0}'.format(request.get_data()))
 
     event_handler_queue = telegram_bp.event_handler_queue
-    # TODO uncomment: event_handler_queue.put_nowait(('raw_data', request.get_data()))
+    data = json.loads(request.get_data())
     # --- request handling block START ---
     # retrieve the message in JSON and then transform it to Telegram object
     update = telegram.Update.de_json(request.get_json(force=True), telegram_bp.bot)
@@ -36,21 +37,23 @@ def incoming_from_telegram():
     if hasattr(update, 'message'):
         chat_id = update.message.chat_id
 
-        if '/start' in update.message.text:
-            mongo_config = telegram_bp.config['mongoConfig']
+        if '/start' in update.message.text and update.message.text.replace('/start', ''):
+            mongo_config = telegram_bp.config['mongo']
             client = MongoClient(
                 mongo_config['urlPattern'].format(mongo_config['user'], mongo_config['password'], mongo_config['host']))
             db = client[mongo_config['admsgConfigDB']]
+            channel_id, campaign_id = urlsafe_b64decode(str(update.message.text).replace('/start ', '')).split(';')
+            data['channel_id'] = channel_id
+            data['campaign_id'] = campaign_id
 
-            channel_id, campaign_id = urlsafe_b64decode(update.message.text.replace('/start ', '')).split(';')
-            campaign = db.Campaign.find({'_id': campaign_id})
-            link = campaign.link
-            text = campaign.text + ' ' + \
+            campaign = db.Campaign.find_one({'_id': campaign_id})
+            link = campaign['link']
+            text = campaign['text'] + ' ' + \
                    telegram_bp.config['bot']['trackerUrlPattern'] \
-                       .format(urlsafe_b64encode(link),
+                       .format(urllib.quote(link, safe=''),
                                urlsafe_b64encode(channel_id),
                                urlsafe_b64encode(campaign_id),
-                               urlsafe_b64encode(update.message.from_user.id))
+                               urlsafe_b64encode(str(update.message.from_user.id)))
 
             # Telegram understands UTF-8, so encode text for unicode compatibility
 
@@ -60,6 +63,7 @@ def incoming_from_telegram():
             client.close()
             # --- simple request handling block END ---
 
+    event_handler_queue.put_nowait(('raw_data', (mongo_config['bot']['collection']['telegram'], json.dumps(data))))
     return Response(status=200)
 
 

@@ -24,4 +24,4 @@ bot:
   deeplink:
     telegram: 'https://telegram.me/{}?start={}'
     viber: 'https://telegram.me/{}?start={}'
-  trackerUrlPattern: 'http://admsg.ru:8083/tracker?targeturl={}&channel_id={}&campaign_id={}&user_id={}'
+  trackerUrlPattern: 'http://admsg.ru:8083/tracker?targetUrl={}&channel_id={}&campaign_id={}&user_id={}'
