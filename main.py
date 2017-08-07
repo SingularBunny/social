@@ -97,35 +97,41 @@ def run_bots(config, stop_event):
     bots = {}
     ports = {}
 
-    flag = True
     while True:
         if stop_event.is_set():
             break
 
-        if flag:
-            # run bots
-            channel_id = 'AjhwTEhd11'
-            token = '435537512:AAEoRhCOg3oW0FgyzxnhC-8bD-WwCoi0D6E'
-            chat_id = '@cannabusiness'
-            port = 8443
-            channel_type = 'telegram'
+        # run bots
 
-            if token not in apps:
-                # app = make_viber_bot_app(config_worker, event_queues_dict[EVENT_PROCESSOR], bot_name, avatar, token,
-                #                          BOT_WEBHOOK_URL.format(port))
-                bot = make_telegram_bot(token)
-                bots[channel_id] = bot
+        port = 8443
+        channel_type = 'telegram'
 
-                app = make_telegram_app(config, event_queues_dict[EVENT_PROCESSOR], bot,
-                                        bot_config['webhookUrl'].format(port))
+        for channel in get_channels(mongo_config):
+            channel_id = channel['_id']
+            channel_type = channel['network']
+            authdata = channel['authdata']
+            token = authdata['api_key']
+
+            if channel_id not in apps:
+                if channel_type == 'viber':
+                    # app = make_viber_bot_app(config_worker, event_queues_dict[EVENT_PROCESSOR], bot_name, avatar, token,
+                    #                          BOT_WEBHOOK_URL.format(port))
+                    pass
+                elif channel_type == 'telegram':
+                    chat_id = '@cannabusiness'
+                    bot = make_telegram_bot(token)
+                    app = make_telegram_app(config, event_queues_dict[EVENT_PROCESSOR], bot,
+                                            bot_config['webhookUrl'].format(port))
+
                 app.webhook_setter.start()
-
                 app_process = Process(name='',
                                       target=flaskrun,
                                       args=(app, '0.0.0.0', port, config['pathToCrt'], config['pathToKey']))
                 app_process.daemon = True
                 app_process.start()
+
                 apps[channel_id] = bot
+                bots[channel_id] = bot
                 ports[channel_id] = port
 
             # start campaigns
@@ -142,18 +148,25 @@ def run_bots(config, stop_event):
                 assert (campaign_id is not None and text is not None)
 
                 text += ' ' + deep_link
-
                 bots[channel_id].send_message(chat_id=chat_id, text=text.encode('utf-8'))
-            flag = False
-            time.sleep(30)
+
+            time.sleep(60)
 
 # --- Processes block END ---
 
 def get_channels(mongo_config):
-    pass
+    client = MongoClient(
+        mongo_config['urlPattern'].format(mongo_config['user'], mongo_config['password'], mongo_config['host']))
+    db = client[mongo_config['admsgConfigDB']]
+    # TODO change filter for viber too
+    cur = db.Channel.aggregate(
+        [{'$match': {'$or': [{'network': 'telegram'}, {'network': 'telegram'}]}},
+         {'$match': {'authdata': {'$exists': True, '$gt': {}}}},
+         {'$match': {'authdata.api_key': {'$exists': True}}}])
+    client.close()
+    return cur
 
 
-# TODO add filter for started campaigns
 def get_campaigns(mongo_config, channel_id):
     client = MongoClient(
         mongo_config['urlPattern'].format(mongo_config['user'], mongo_config['password'], mongo_config['host']))
@@ -172,7 +185,7 @@ def get_campaigns(mongo_config, channel_id):
          {'$project': {'name': 1, 'channel': 1, 'campaign_id': '$campaigns._id', 'text': '$campaigns.text',
                        'link': '$campaigns.link'}}])
     client.close()
-    return list(cur)
+    return cur
 
 
 def mark_campaign_as_started(mongo_config, campaign_id):
