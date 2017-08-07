@@ -119,6 +119,9 @@ def run_bots(config, stop_event):
                     pass
                 elif channel_type == 'telegram':
                     chat_id = '@cannabusiness'
+                    acceptable_ports = bot_config['telegram']['acceptablePorts']
+                    # TODO chose port here
+
                     bot = make_telegram_bot(token)
                     app = make_telegram_app(config, event_queues_dict[EVENT_PROCESSOR], bot,
                                             bot_config['webhookUrl'].format(port))
@@ -138,12 +141,12 @@ def run_bots(config, stop_event):
             for campaign in get_campaigns(mongo_config, channel_id):
                 text = campaign['text']
                 campaign_id = campaign['campaign_id']
-                deep_link = make_telegram_deep_link(bot_config['deeplink']['telegram'],
+                deep_link = make_telegram_deep_link(bot_config['telegram']['deeplink'],
                                                     bot.username,
                                                     channel_id,
                                                     campaign_id) \
                     if channel_type == CHANNEL_TYPE_TELEGRAM \
-                    else make_viber_deep_link if channel_type == CHANNEL_TYPE_VIBER else None
+                    else make_viber_deep_link() if channel_type == CHANNEL_TYPE_VIBER else None
 
                 assert (campaign_id is not None and text is not None)
 
