@@ -26,5 +26,5 @@ bot:
     viber: 'https://telegram.me/{}?start={}'
   telegram:
     deeplink: 'https://telegram.me/{}?start={}'
-    acceptablePorts: []
+    acceptablePorts: [443, 80, 88, 8443]
   trackerUrlPattern: 'http://admsg.ru:8083/tracker?targetUrl={}&channel_id={}&campaign_id={}&user_id={}'

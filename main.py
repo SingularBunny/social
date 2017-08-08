@@ -137,6 +137,7 @@ def run_bots(config, stop_event):
                 bots[channel_id] = bot
                 ports[channel_id] = port
 
+            time.sleep(60)
             # start campaigns
             for campaign in get_campaigns(mongo_config, channel_id):
                 text = campaign['text']

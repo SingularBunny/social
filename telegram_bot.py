@@ -34,14 +34,15 @@ def incoming_from_telegram():
     # retrieve the message in JSON and then transform it to Telegram object
     update = telegram.Update.de_json(request.get_json(force=True), telegram_bp.bot)
 
-    if hasattr(update, 'message'):
+    mongo_config = telegram_bp.config['mongo']
+    client = MongoClient(
+        mongo_config['urlPattern'].format(mongo_config['user'], mongo_config['password'], mongo_config['host']))
+    db = client[mongo_config['admsgConfigDB']]
+
+    if update.message != None:
         chat_id = update.message.chat_id
 
         if '/start' in update.message.text and update.message.text.replace('/start', ''):
-            mongo_config = telegram_bp.config['mongo']
-            client = MongoClient(
-                mongo_config['urlPattern'].format(mongo_config['user'], mongo_config['password'], mongo_config['host']))
-            db = client[mongo_config['admsgConfigDB']]
             channel_id, campaign_id = urlsafe_b64decode(str(update.message.text).replace('/start ', '')).split(';')
             data['channel_id'] = channel_id
             data['campaign_id'] = campaign_id
@@ -60,10 +61,10 @@ def incoming_from_telegram():
 
             # repeat the same message back (echo)
             telegram_bp.bot.sendMessage(chat_id=chat_id, text=text.encode('utf-8'))
-            client.close()
             # --- simple request handling block END ---
 
     event_handler_queue.put_nowait(('raw_data', (mongo_config['bot']['collection']['telegram'], json.dumps(data))))
+    client.close()
     return Response(status=200)
 
 
