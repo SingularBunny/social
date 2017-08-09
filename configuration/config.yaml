@@ -27,4 +27,4 @@ bot:
   telegram:
     deeplink: 'https://telegram.me/{}?start={}'
     acceptablePorts: [443, 80, 88, 8443]
-  trackerUrlPattern: 'http://admsg.ru:8083/tracker?targetUrl={}&channel_id={}&campaign_id={}&user_id={}'
+  trackerUrlPattern: 'http://admsg.ru/tracker?targetUrl={}&channel_id={}&campaign_id={}&user_id={}'
