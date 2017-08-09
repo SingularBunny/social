@@ -38,7 +38,8 @@ event_queues_dict = {EVENT_PROCESSOR: Queue(),
                      STATS_MAINTAINER: Queue()}
 
 CHANNEL_TYPE_VIBER = 'viber'
-CHANNEL_TYPE_TELEGRAM ='telegram'
+CHANNEL_TYPE_TELEGRAM = 'telegram'
+
 
 def process_events(logger_config, event_queues_dict, subscribers_dict):
     """
@@ -75,7 +76,8 @@ def maintain_statistics(config, queue):
     logging.config.dictConfig(logger_config)
     logger = logging.getLogger(STATS_MAINTAINER)
     logger.debug('{0} started'.format(STATS_MAINTAINER))
-    client = MongoClient(mongo_config['urlPattern'].format(mongo_config['user'], mongo_config['password'], mongo_config['host']))
+    client = MongoClient(
+        mongo_config['urlPattern'].format(mongo_config['user'], mongo_config['password'], mongo_config['host']))
     db = client[mongo_config['bot']['db']]
     while True:
         collection, event = queue.get()
@@ -111,6 +113,7 @@ def run_bots(config, stop_event):
             channel_type = channel['network']
             authdata = channel['authdata']
             token = authdata['api_key']
+            chat_id = '@cannabusiness'
 
             if channel_id not in apps:
                 if channel_type == 'viber':
@@ -118,7 +121,7 @@ def run_bots(config, stop_event):
                     #                          BOT_WEBHOOK_URL.format(port))
                     pass
                 elif channel_type == 'telegram':
-                    chat_id = '@cannabusiness'
+
                     acceptable_ports = bot_config['telegram']['acceptablePorts']
                     # TODO chose port here
 
@@ -137,7 +140,8 @@ def run_bots(config, stop_event):
                 bots[channel_id] = bot
                 ports[channel_id] = port
 
-            time.sleep(60)
+            update_channel_members_count(mongo_config, channel_id, chat_id, bots[channel_id])
+
             # start campaigns
             for campaign in get_campaigns(mongo_config, channel_id):
                 text = campaign['text']
@@ -155,6 +159,7 @@ def run_bots(config, stop_event):
                 bots[channel_id].send_message(chat_id=chat_id, text=text.encode('utf-8'))
 
             time.sleep(60)
+
 
 # --- Processes block END ---
 
@@ -200,12 +205,22 @@ def mark_campaign_as_started(mongo_config, campaign_id):
     client.close()
 
 
+def update_channel_members_count(mongo_config, channel_id, chat_id, bot):
+    client = MongoClient(
+        mongo_config['urlPattern'].format(mongo_config['user'], mongo_config['password'], mongo_config['host']))
+    db = client[mongo_config['admsgConfigDB']]
+    members_count = bot.get_chat_members_count(chat_id)
+    db.Channel.update({'_id': channel_id}, {'$set': {'members_count': members_count}})
+    client.close()
+
+
 def init_mongo(mongo_config):
     """
     Init Mongo indexes.
     """
     logger.debug('Init Mongo')
-    client = MongoClient(mongo_config['urlPattern'].format(mongo_config['user'], mongo_config['password'], mongo_config['host']))
+    client = MongoClient(
+        mongo_config['urlPattern'].format(mongo_config['user'], mongo_config['password'], mongo_config['host']))
     db = client[mongo_config['bot']['db']]
     for collection in mongo_config['bot']['collection'].keys():
         db[mongo_config['bot']['collection'][collection]].create_index([('$**', 'text')])
@@ -241,7 +256,7 @@ if __name__ == '__main__':
     logger.debug('hello')
     # --- init logger START ---
 
-    #init_mongo(config['mongo'])
+    # init_mongo(config['mongo'])
 
     event_processor = Process(name=EVENT_PROCESSOR,
                               target=process_events,
