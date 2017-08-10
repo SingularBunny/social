@@ -58,13 +58,13 @@ def incoming_from_telegram():
              'channel_id': channel_id,
              'campaign_id': campaign_id,
              'user_id': update.message.from_user.id,
-             'link': urllib.quote(link, safe='')
+             'link': link
              },
             {'$currentDate': {
                 'ts': {'$type': 'timestamp'}
             }
             },
-            {'upsert': True}
+            upsert=True
         )
 
         text = campaign['text'] + ' ' + \
