@@ -146,6 +146,7 @@ def run_bots(config, stop_event):
             for campaign in get_campaigns(mongo_config, channel_id):
                 text = campaign['text']
                 campaign_id = campaign['campaign_id']
+                link = campaign['link']
                 deep_link = make_telegram_deep_link(bot_config['telegram']['deeplink'],
                                                     bot.username,
                                                     channel_id,

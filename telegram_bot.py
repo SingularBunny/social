@@ -7,6 +7,7 @@ from base64 import urlsafe_b64encode, b32encode, b16encode, urlsafe_b64decode
 from multiprocessing import Process
 
 import telegram
+from bson import ObjectId
 from flask import Flask, request, Response, Blueprint
 from pymongo import MongoClient
 
@@ -38,6 +39,7 @@ def incoming_from_telegram():
     client = MongoClient(
         mongo_config['urlPattern'].format(mongo_config['user'], mongo_config['password'], mongo_config['host']))
     db = client[mongo_config['admsgConfigDB']]
+    user_tracker_db = client[mongo_config['userTracker']['db']]
 
     if update.message != None:
         chat_id = update.message.chat_id
@@ -47,21 +49,33 @@ def incoming_from_telegram():
             data['channel_id'] = channel_id
             data['campaign_id'] = campaign_id
 
-            campaign = db.Campaign.find_one({'_id': campaign_id})
-            link = campaign['link']
-            text = campaign['text'] + ' ' + \
-                   telegram_bp.config['bot']['trackerUrlPattern'] \
-                       .format(urllib.quote(link, safe=''),
-                               urlsafe_b64encode(channel_id),
-                               urlsafe_b64encode(campaign_id),
-                               urlsafe_b64encode(str(update.message.from_user.id)))
+        campaign = db.Campaign.find_one({'_id': campaign_id})
+        link = campaign['link']
 
-            # Telegram understands UTF-8, so encode text for unicode compatibility
+        map_id = ObjectId()
+        user_tracker_db.map.update(
+            {"_id": map_id,
+             'channel_id': channel_id,
+             'campaign_id': campaign_id,
+             'user_id': update.message.from_user.id,
+             'link': urllib.quote(link, safe='')
+             },
+            {'$currentDate': {
+                'ts': {'$type': 'timestamp'}
+            }
+            },
+            {'upsert': True}
+        )
+
+        text = campaign['text'] + ' ' + \
+               telegram_bp.config['bot']['trackerUrlPattern'] \
+                   .format(map_id)
+        # Telegram understands UTF-8, so encode text for unicode compatibility
 
 
-            # repeat the same message back (echo)
-            telegram_bp.bot.sendMessage(chat_id=chat_id, text=text.encode('utf-8'))
-            # --- simple request handling block END ---
+        # repeat the same message back (echo)
+        telegram_bp.bot.sendMessage(chat_id=chat_id, text=text.encode('utf-8'))
+        # --- simple request handling block END ---
 
     event_handler_queue.put_nowait(('raw_data', (mongo_config['bot']['collection']['telegram'], json.dumps(data))))
     client.close()

@@ -17,6 +17,10 @@ mongo:
     collection:
       viber: 'viber'
       telegram: 'telegram'
+  userTracker:
+    db: 'userTracker'
+    collection:
+      map: 'map'
 
 # bots
 bot:
@@ -27,4 +31,4 @@ bot:
   telegram:
     deeplink: 'https://telegram.me/{}?start={}'
     acceptablePorts: [443, 80, 88, 8443]
-  trackerUrlPattern: 'http://admsg.ru/tracker?targetUrl={}&channel_id={}&campaign_id={}&user_id={}'
+  trackerUrlPattern: 'http://admsg.ru/rd?{}'
