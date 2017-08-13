@@ -158,6 +158,7 @@ def run_bots(config, stop_event):
 
                 text += ' ' + deep_link
                 bots[channel_id].send_message(chat_id=chat_id, text=text.encode('utf-8'))
+                mark_campaign_as_finished(mongo_config, campaign_id)
 
             time.sleep(60)
 
@@ -183,7 +184,6 @@ def get_campaigns(mongo_config, channel_id):
     db = client[mongo_config['admsgConfigDB']]
     cur = db.Channel.aggregate(
         [{'$match': {'_id': channel_id}},
-         {'$match': {'status': {'$ne': 'started'}}},
          {'$project': {'id': {'$concat': ['Channel$', '$_id']}, 'name': 1}},
          {'$lookup': {'from': 'CampaignChannels', 'localField': 'id', 'foreignField': '_p_channel',
                       'as': 'channel_campaigns'}},
@@ -192,17 +192,18 @@ def get_campaigns(mongo_config, channel_id):
                        'campaign': {'$substr': ['$channel_campaigns._p_campaign', len('Campaign$'), -1]}}},
          {'$lookup': {'from': 'Campaign', 'localField': 'campaign', 'foreignField': '_id', 'as': 'campaigns'}},
          {'$unwind': '$campaigns'},
+         {'$match': {'campaigns.status': 'started'}},
          {'$project': {'name': 1, 'channel': 1, 'campaign_id': '$campaigns._id', 'text': '$campaigns.text',
                        'link': '$campaigns.link'}}])
     client.close()
     return cur
 
 
-def mark_campaign_as_started(mongo_config, campaign_id):
+def mark_campaign_as_finished(mongo_config, campaign_id):
     client = MongoClient(
         mongo_config['urlPattern'].format(mongo_config['user'], mongo_config['password'], mongo_config['host']))
     db = client[mongo_config['admsgConfigDB']]
-    db.Campaign.update({'_id': campaign_id}, {'$set': {'status': 'started'}})
+    db.Campaign.update({'_id': campaign_id}, {'$set': {'status': 'finished'}})
     client.close()
 
 
