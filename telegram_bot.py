@@ -29,7 +29,6 @@ telegram_bp = Blueprint('telegram_bp', __name__)
 def incoming_from_telegram():
     telegram_bp.logger.debug('received request. post data: {0}'.format(request.get_data()))
 
-    event_handler_queue = telegram_bp.event_handler_queue
     data = json.loads(request.get_data())
     # --- request handling block START ---
     # retrieve the message in JSON and then transform it to Telegram object
@@ -77,6 +76,7 @@ def incoming_from_telegram():
         telegram_bp.bot.sendMessage(chat_id=chat_id, text=text.encode('utf-8'))
         # --- simple request handling block END ---
 
+    event_handler_queue = telegram_bp.event_handler_queue
     event_handler_queue.put_nowait(('raw_data', (mongo_config['bot']['collection']['telegram'], json.dumps(data))))
     client.close()
     return Response(status=200)

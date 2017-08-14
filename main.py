@@ -162,6 +162,26 @@ def run_bots(config, stop_event):
 
             time.sleep(60)
 
+            # start campaigns
+            for post in get_posts(mongo_config, channel_id):
+                text = post['text']
+                campaign_id = post['campaign_id']
+                link = post['link']
+                deep_link = make_telegram_deep_link(bot_config['telegram']['deeplink'],
+                                                    bot.username,
+                                                    channel_id,
+                                                    campaign_id) \
+                    if channel_type == CHANNEL_TYPE_TELEGRAM \
+                    else make_viber_deep_link() if channel_type == CHANNEL_TYPE_VIBER else None
+
+                assert (campaign_id is not None and text is not None)
+
+                text += ' ' + deep_link
+                bots[channel_id].send_message(chat_id=chat_id, text=text.encode('utf-8'))
+                mark_campaign_as_finished(mongo_config, campaign_id)
+
+            time.sleep(60)
+
 
 # --- Processes block END ---
 
@@ -198,6 +218,20 @@ def get_campaigns(mongo_config, channel_id):
     client.close()
     return cur
 
+def get_posts(mongo_config, channel_id):
+    client = MongoClient(
+        mongo_config['urlPattern'].format(mongo_config['user'], mongo_config['password'], mongo_config['host']))
+    db = client[mongo_config['admsgConfigDB']]
+    cur = db.Channel.aggregate(
+        [{'$match': {'_id': channel_id}},
+         # {'$project': {'id': {'$concat': ['Post$', '$_id']}, 'name': 1}},
+         {'$lookup': {'from': 'Post', 'localField': '_id', 'foreignField': '_p_channel', 'as': 'posts'}},
+         {'$unwind': '$posts'},
+         {'$match': {'posts.status': 'started'}},
+         {'$project': {'name': 1, 'channel': 1, 'text': '$posts.text',
+                       'link': '$posts.link'}}])
+    client.close()
+    return cur
 
 def mark_campaign_as_finished(mongo_config, campaign_id):
     client = MongoClient(

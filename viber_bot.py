@@ -33,9 +33,6 @@ viber_bp = Blueprint('viber_bp', __name__)
 def incoming_from_viber():
     viber_bp.logger.debug('received request. post data: {0}'.format(request.get_data()))
 
-    event_handler_queue = viber_bp.event_handler_queue
-    event_handler_queue.put_nowait(('raw_data', request.get_data()))
-
     viber_request = viber_bp.bot.parse_request(request.get_data())
 
     # --- simple request handling block START ---
@@ -54,6 +51,8 @@ def incoming_from_viber():
         viber_bp.logger.warn('client failed receiving message. failure: {0}'.format(viber_request))
     # --- simple request handling block END ---
 
+    event_handler_queue = viber_bp.event_handler_queue
+    event_handler_queue.put_nowait(('raw_data', request.get_data()))
     return Response(status=200)
 
 
