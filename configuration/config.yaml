@@ -25,9 +25,8 @@ mongo:
 # bots
 bot:
   webhookUrl: 'https://admsg.ru:{}/'
-  deeplink:
-    telegram: 'https://telegram.me/{}?start={}'
-    viber: 'https://telegram.me/{}?start={}'
+  viber:
+    deepLink: 'viber://pa?chatURI={}&context={}'
   telegram:
     deeplink: 'https://telegram.me/{}?start={}'
     acceptablePorts: [443, 80, 88, 8443]

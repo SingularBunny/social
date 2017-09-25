@@ -10,7 +10,7 @@ from multiprocessing import Process, Queue, Event
 from flaskrun import flaskrun
 from logging_utils import listener_process
 from telegram_bot import make_telegram_app, make_telegram_bot, make_telegram_deep_link
-from viber_bot import make_viber_app, make_viber_deep_link
+from viber_bot import make_viber_app, make_viber_deep_link, make_viber_bot
 
 try:
     from yaml import CLoader as Loader, CDumper as Dumper, load
@@ -117,14 +117,15 @@ def run_bots(config, stop_event):
 
             if channel_id not in apps:
                 if channel_type == 'viber':
-                    # app = make_viber_bot_app(config_worker, event_queues_dict[EVENT_PROCESSOR], bot_name, avatar, token,
-                    #                          BOT_WEBHOOK_URL.format(port))
+                    # TODO add valid bot name and avatar
+                    bot = make_viber_bot("test", None, token)
+                    app = make_viber_app(config_worker, event_queues_dict[EVENT_PROCESSOR], bot,
+                                         bot_config['webhookUrl'].format(port))
                     pass
                 elif channel_type == 'telegram':
 
                     acceptable_ports = bot_config['telegram']['acceptablePorts']
                     # TODO chose port here
-
                     bot = make_telegram_bot(token)
                     app = make_telegram_app(config, event_queues_dict[EVENT_PROCESSOR], bot,
                                             bot_config['webhookUrl'].format(port))
@@ -152,11 +153,15 @@ def run_bots(config, stop_event):
                                                     channel_id,
                                                     campaign_id) \
                     if channel_type == CHANNEL_TYPE_TELEGRAM \
-                    else make_viber_deep_link() if channel_type == CHANNEL_TYPE_VIBER else None
+                    else make_viber_deep_link(bot_config['viber']['deeplink'],
+                                                    bot.get_account_info()['uri'],
+                                                    channel_id,
+                                                    campaign_id) if channel_type == CHANNEL_TYPE_VIBER else None
 
                 assert (campaign_id is not None and text is not None)
 
                 text += ' ' + deep_link
+                # TODO change send message section to sent in Viber too.
                 bots[channel_id].send_message(chat_id=chat_id, text=text.encode('utf-8'))
                 mark_campaign_as_finished(mongo_config, campaign_id)
 
@@ -165,33 +170,59 @@ def run_bots(config, stop_event):
             # start campaigns
             for post in get_posts(mongo_config, channel_id):
                 text = post['text']
-                campaign_id = post['campaign_id']
+                post_id = post['post_id']
                 link = post['link']
                 deep_link = make_telegram_deep_link(bot_config['telegram']['deeplink'],
                                                     bot.username,
                                                     channel_id,
-                                                    campaign_id) \
+                                                    post_id) \
                     if channel_type == CHANNEL_TYPE_TELEGRAM \
-                    else make_viber_deep_link() if channel_type == CHANNEL_TYPE_VIBER else None
+                    else make_viber_deep_link(bot_config['viber']['deeplink'],
+                                              bot.get_account_info()['uri'],
+                                              channel_id,
+                                              post_id) if channel_type == CHANNEL_TYPE_VIBER else None
 
-                assert (campaign_id is not None and text is not None)
+                assert (post_id is not None and text is not None)
 
                 text += ' ' + deep_link
                 bots[channel_id].send_message(chat_id=chat_id, text=text.encode('utf-8'))
-                mark_campaign_as_finished(mongo_config, campaign_id)
+                mark_campaign_as_finished(mongo_config, post_id)
 
             time.sleep(60)
 
 
 # --- Processes block END ---
+def send_messages(posts,
+                  post_id_field,
+                  make_deep_link_method,
+                  deep_link_pattern,
+                  channel_id,
+                  channel_mongo_id,
+                  send_message_method,
+                  send_message_args,
+                  send_message_kwargs):
 
+    for post in posts:
+        text = post['text']
+        post_mongo_id = post[post_id_field]
+        link = post['link']
+
+        assert (post_mongo_id is not None and text is not None)
+
+        deep_link = make_deep_link_method(deep_link_pattern,
+                                          channel_id,
+                                          channel_mongo_id,
+                                          post_mongo_id)
+
+        text += ' ' + deep_link
+        send_message_method(*send_message_args, **send_message_kwargs)
+        mark_campaign_as_finished(mongo_config, campaign_id)
 def get_channels(mongo_config):
     client = MongoClient(
         mongo_config['urlPattern'].format(mongo_config['user'], mongo_config['password'], mongo_config['host']))
     db = client[mongo_config['admsgConfigDB']]
-    # TODO change filter for viber too
     cur = db.Channel.aggregate(
-        [{'$match': {'$or': [{'network': 'telegram'}, {'network': 'telegram'}]}},
+        [{'$match': {'$or': [{'network': 'telegram'}, {'network': 'viber'}]}},
          {'$match': {'authdata': {'$exists': True, '$gt': {}}}},
          {'$match': {'authdata.api_key': {'$exists': True}}}])
     client.close()
@@ -228,7 +259,7 @@ def get_posts(mongo_config, channel_id):
          {'$lookup': {'from': 'Post', 'localField': '_id', 'foreignField': '_p_channel', 'as': 'posts'}},
          {'$unwind': '$posts'},
          {'$match': {'posts.status': 'started'}},
-         {'$project': {'name': 1, 'channel': 1, 'text': '$posts.text',
+         {'$project': {'name': 1, 'channel': 1, 'post_id': '$posts._id', 'text': '$posts.text',
                        'link': '$posts.link'}}])
     client.close()
     return cur

@@ -1,6 +1,7 @@
 import json
 
 import logging
+from base64 import urlsafe_b64encode
 
 from multiprocessing import Process
 
@@ -56,17 +57,17 @@ def incoming_from_viber():
     return Response(status=200)
 
 
-@viber_bp.route('/post_message/<string:admin_id>', methods=['POST'])
-def post_message(admin_id):
-    viber_bp.logger.debug('Send message request. post data: {0}'.format(request.get_data()))
-    viber_bp.bot.post(admin_id, messages.get_message(json.loads(request.get_data())))
-    return Response(status=200)
-
-
-@viber_bp.route('/account_info', methods=['GET'])
-def account_info():
-    viber_bp.logger.debug('Get account info request.')
-    return json.dumps(viber_bp.bot.get_account_info())
+# @viber_bp.route('/post_message/<string:admin_id>', methods=['POST'])
+# def post_message(admin_id):
+#     viber_bp.logger.debug('Send message request. post data: {0}'.format(request.get_data()))
+#     viber_bp.bot.post(admin_id, messages.get_message(json.loads(request.get_data())))
+#     return Response(status=200)
+#
+#
+# @viber_bp.route('/account_info', methods=['GET'])
+# def account_info():
+#     viber_bp.logger.debug('Get account info request.')
+#     return json.dumps(viber_bp.bot.get_account_info())
 
 
 # --- REST block END ---
@@ -76,12 +77,13 @@ def make_viber_app(logger_config, event_handler_queue, bot, url):
     return make_bot_app(logger_config, viber_bp, bot.set_webhook, bot, url, event_handler_queue)
 
 
-def make_viber_app(bot_name, bot_avatar, bot_auth_token):
+def make_viber_bot(bot_name, bot_avatar, bot_auth_token):
     return Api(BotConfiguration(
         name=bot_name,
         avatar=bot_avatar,
         auth_token=bot_auth_token
     ))
 
-def make_viber_deep_link():
-    pass
+
+def make_viber_deep_link(deeplink_pattern, bot_id, channel_id, campaign_id):
+    return deeplink_pattern.format(bot_id, urlsafe_b64encode(channel_id + ';' + campaign_id))
