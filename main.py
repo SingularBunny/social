@@ -7,6 +7,8 @@ from pymongo import MongoClient
 
 from multiprocessing import Process, Queue, Event
 
+from viberbot.api.messages import TextMessage
+
 from flaskrun import flaskrun
 from logging_utils import listener_process
 from telegram_bot import make_telegram_app, make_telegram_bot, make_telegram_deep_link
@@ -109,13 +111,13 @@ def run_bots(config, stop_event):
         channel_type = 'telegram'
 
         for channel in get_channels(mongo_config):
-            channel_id = channel['_id']
+            channel_mongo_id = channel['_id']
             channel_type = channel['network']
             authdata = channel['authdata']
             token = authdata['api_key']
             chat_id = '@cannabusiness'
 
-            if channel_id not in apps:
+            if channel_mongo_id not in apps:
                 if channel_type == 'viber':
                     # TODO add valid bot name and avatar
                     bot = make_viber_bot("test", None, token)
@@ -137,86 +139,66 @@ def run_bots(config, stop_event):
                 app_process.daemon = True
                 app_process.start()
 
-                apps[channel_id] = bot
-                bots[channel_id] = bot
-                ports[channel_id] = port
+                apps[channel_mongo_id] = bot
+                bots[channel_mongo_id] = bot
+                ports[channel_mongo_id] = port
 
-            update_channel_members_count(mongo_config, channel_id, chat_id, bots[channel_id])
+            update_channel_members_count(mongo_config, channel_mongo_id, chat_id, bots[channel_mongo_id])
 
             # start campaigns
-            for campaign in get_campaigns(mongo_config, channel_id):
+            for campaign in get_campaigns(mongo_config, channel_mongo_id):
                 text = campaign['text']
                 campaign_id = campaign['campaign_id']
                 link = campaign['link']
                 deep_link = make_telegram_deep_link(bot_config['telegram']['deeplink'],
                                                     bot.username,
-                                                    channel_id,
+                                                    channel_mongo_id,
                                                     campaign_id) \
                     if channel_type == CHANNEL_TYPE_TELEGRAM \
                     else make_viber_deep_link(bot_config['viber']['deeplink'],
-                                                    bot.get_account_info()['uri'],
-                                                    channel_id,
-                                                    campaign_id) if channel_type == CHANNEL_TYPE_VIBER else None
+                                              bot.get_account_info()['uri'],
+                                              channel_mongo_id,
+                                              campaign_id) if channel_type == CHANNEL_TYPE_VIBER else None
 
                 assert (campaign_id is not None and text is not None)
 
                 text += ' ' + deep_link
                 # TODO change send message section to sent in Viber too.
-                bots[channel_id].send_message(chat_id=chat_id, text=text.encode('utf-8'))
-                mark_campaign_as_finished(mongo_config, campaign_id)
+                bots[channel_mongo_id].send_message(chat_id=chat_id, text=text.encode('utf-8')) \
+                    if channel_type == CHANNEL_TYPE_TELEGRAM \
+                    else bots[channel_mongo_id].post_messages_to_public_account(
+                    sender=viber_request.get_sender().get_id(),
+                    messages=[TextMessage(text="sample message")]) \
+                    if channel_type == CHANNEL_TYPE_VIBER else None
+                mark_as_finished(mongo_config, campaign_id)
 
             time.sleep(60)
 
             # start campaigns
-            for post in get_posts(mongo_config, channel_id):
+            for post in get_posts(mongo_config, channel_mongo_id):
                 text = post['text']
                 post_id = post['post_id']
                 link = post['link']
                 deep_link = make_telegram_deep_link(bot_config['telegram']['deeplink'],
                                                     bot.username,
-                                                    channel_id,
+                                                    channel_mongo_id,
                                                     post_id) \
                     if channel_type == CHANNEL_TYPE_TELEGRAM \
                     else make_viber_deep_link(bot_config['viber']['deeplink'],
                                               bot.get_account_info()['uri'],
-                                              channel_id,
+                                              channel_mongo_id,
                                               post_id) if channel_type == CHANNEL_TYPE_VIBER else None
 
                 assert (post_id is not None and text is not None)
 
                 text += ' ' + deep_link
-                bots[channel_id].send_message(chat_id=chat_id, text=text.encode('utf-8'))
-                mark_campaign_as_finished(mongo_config, post_id)
+                bots[channel_mongo_id].send_message(chat_id=chat_id, text=text.encode('utf-8'))
+                mark_as_finished(mongo_config, post_id)
 
             time.sleep(60)
 
 
 # --- Processes block END ---
-def send_messages(posts,
-                  post_id_field,
-                  make_deep_link_method,
-                  deep_link_pattern,
-                  channel_id,
-                  channel_mongo_id,
-                  send_message_method,
-                  send_message_args,
-                  send_message_kwargs):
-
-    for post in posts:
-        text = post['text']
-        post_mongo_id = post[post_id_field]
-        link = post['link']
-
-        assert (post_mongo_id is not None and text is not None)
-
-        deep_link = make_deep_link_method(deep_link_pattern,
-                                          channel_id,
-                                          channel_mongo_id,
-                                          post_mongo_id)
-
-        text += ' ' + deep_link
-        send_message_method(*send_message_args, **send_message_kwargs)
-        mark_campaign_as_finished(mongo_config, campaign_id)
 def get_channels(mongo_config):
     client = MongoClient(
         mongo_config['urlPattern'].format(mongo_config['user'], mongo_config['password'], mongo_config['host']))
@@ -249,6 +231,7 @@ def get_campaigns(mongo_config, channel_id):
     client.close()
     return cur
 
+
 def get_posts(mongo_config, channel_id):
     client = MongoClient(
         mongo_config['urlPattern'].format(mongo_config['user'], mongo_config['password'], mongo_config['host']))
@@ -264,7 +247,8 @@ def get_posts(mongo_config, channel_id):
     client.close()
     return cur
 
-def mark_campaign_as_finished(mongo_config, campaign_id):
+
+def mark_as_finished(mongo_config, campaign_id):
     client = MongoClient(
         mongo_config['urlPattern'].format(mongo_config['user'], mongo_config['password'], mongo_config['host']))
     db = client[mongo_config['admsgConfigDB']]
