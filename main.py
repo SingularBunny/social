@@ -167,8 +167,8 @@ def run_bots(config, stop_event):
                 bots[channel_mongo_id].send_message(chat_id=chat_id, text=text.encode('utf-8')) \
                     if channel_type == CHANNEL_TYPE_TELEGRAM \
                     else bots[channel_mongo_id].post_messages_to_public_account(
-                    sender=viber_request.get_sender().get_id(),
-                    messages=[TextMessage(text="sample message")]) \
+                    sender=bot.get_account_info()['id'],
+                    messages=[TextMessage(text=text)]) \
                     if channel_type == CHANNEL_TYPE_VIBER else None
                 mark_as_finished(mongo_config, campaign_id)
 
@@ -192,7 +192,13 @@ def run_bots(config, stop_event):
                 assert (post_id is not None and text is not None)
 
                 text += ' ' + deep_link
-                bots[channel_mongo_id].send_message(chat_id=chat_id, text=text.encode('utf-8'))
+                bots[channel_mongo_id].send_message(chat_id=chat_id, text=text.encode('utf-8')) \
+                    if channel_type == CHANNEL_TYPE_TELEGRAM \
+                    else bots[channel_mongo_id].post_messages_to_public_account(
+                    sender=bot.get_account_info()['id'],
+                    messages=[TextMessage(text=text)]) \
+                    if channel_type == CHANNEL_TYPE_VIBER else None
+
                 mark_as_finished(mongo_config, post_id)
 
             time.sleep(60)

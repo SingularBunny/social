@@ -69,10 +69,8 @@ def incoming_from_telegram():
         text = campaign['text'] + ' ' + \
                telegram_bp.config['bot']['trackerUrlPattern'] \
                    .format(map_id)
+
         # Telegram understands UTF-8, so encode text for unicode compatibility
-
-
-        # repeat the same message back (echo)
         telegram_bp.bot.sendMessage(chat_id=chat_id, text=text.encode('utf-8'))
         # --- simple request handling block END ---
 
