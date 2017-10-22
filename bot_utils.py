@@ -17,8 +17,8 @@ def set_webhook(logger_config, set_webhook, url):
         except Exception as e:
             logger.debug(e)
 
-def make_bot_app(config, bot_blueprint, set_webhook_method, bot, url, event_handler_queue):
 
+def make_bot_app(config, bot_blueprint, set_webhook_method, bot, url, event_handler_queue):
     logging.config.dictConfig(config['loggerConfig'])
     logger = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ def make_bot_app(config, bot_blueprint, set_webhook_method, bot, url, event_hand
     scheduler = sched.scheduler(time.time, time.sleep)
     scheduler.enter(5, 1, set_webhook, (config['loggerConfig'], set_webhook_method, url))
     webhook_setter = Process(name='Webhook Setter',
-                target=scheduler.run)
+                             target=scheduler.run)
     webhook_setter.daemon = True
 
     app._logger = logger

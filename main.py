@@ -121,7 +121,7 @@ def run_bots(config, stop_event):
                 if channel_type == 'viber':
                     # TODO add valid bot name and avatar
                     bot = make_viber_bot("test", None, token)
-                    app = make_viber_app(config_worker, event_queues_dict[EVENT_PROCESSOR], bot,
+                    app = make_viber_app(config, event_queues_dict[EVENT_PROCESSOR], bot,
                                          bot_config['webhookUrl'].format(port))
                     pass
                 elif channel_type == 'telegram':
@@ -143,19 +143,20 @@ def run_bots(config, stop_event):
                 bots[channel_mongo_id] = bot
                 ports[channel_mongo_id] = port
 
-            update_channel_members_count(mongo_config, channel_mongo_id, chat_id, bots[channel_mongo_id])
+            if channel_type == CHANNEL_TYPE_TELEGRAM:
+                update_channel_members_count(mongo_config, channel_mongo_id, chat_id, bots[channel_mongo_id])
 
             # start campaigns
             for campaign in get_campaigns(mongo_config, channel_mongo_id):
                 text = campaign['text']
                 campaign_id = campaign['campaign_id']
                 link = campaign['link']
-                deep_link = make_telegram_deep_link(bot_config['telegram']['deeplink'],
+                deep_link = make_telegram_deep_link(bot_config['telegram']['deepLink'],
                                                     bot.username,
                                                     channel_mongo_id,
                                                     campaign_id) \
                     if channel_type == CHANNEL_TYPE_TELEGRAM \
-                    else make_viber_deep_link(bot_config['viber']['deeplink'],
+                    else make_viber_deep_link(bot_config['viber']['deepLink'],
                                               bot.get_account_info()['uri'],
                                               channel_mongo_id,
                                               campaign_id) if channel_type == CHANNEL_TYPE_VIBER else None
@@ -176,15 +177,16 @@ def run_bots(config, stop_event):
 
             # start campaigns
             for post in get_posts(mongo_config, channel_mongo_id):
+
                 text = post['text']
                 post_id = post['post_id']
                 link = post['link']
-                deep_link = make_telegram_deep_link(bot_config['telegram']['deeplink'],
+                deep_link = make_telegram_deep_link(bot_config['telegram']['deepLink'],
                                                     bot.username,
                                                     channel_mongo_id,
                                                     post_id) \
                     if channel_type == CHANNEL_TYPE_TELEGRAM \
-                    else make_viber_deep_link(bot_config['viber']['deeplink'],
+                    else make_viber_deep_link(bot_config['viber']['deepLink'],
                                               bot.get_account_info()['uri'],
                                               channel_mongo_id,
                                               post_id) if channel_type == CHANNEL_TYPE_VIBER else None

@@ -94,8 +94,8 @@ def incoming_from_viber():
 # --- REST block END ---
 
 
-def make_viber_app(logger_config, event_handler_queue, bot, url):
-    return make_bot_app(logger_config, viber_bp, bot.set_webhook, bot, url, event_handler_queue)
+def make_viber_app(config, event_handler_queue, bot, url):
+    return make_bot_app(config, viber_bp, bot.set_webhook, bot, url, event_handler_queue)
 
 
 def make_viber_bot(bot_name, bot_avatar, bot_auth_token):

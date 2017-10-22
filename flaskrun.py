@@ -1,9 +1,10 @@
 import optparse
 
+
 def flaskrun(app, default_host="127.0.0.1",
-                  default_port="5000",
-                  crt = None,
-                  key = None):
+             default_port="5000",
+             crt=None,
+             key=None):
     """
     Takes a flask.Flask instance and runs it. Parses
     command-line flags to configure the app.
@@ -46,7 +47,7 @@ def flaskrun(app, default_host="127.0.0.1",
 
         app.config['PROFILE'] = True
         app.wsgi_app = ProfilerMiddleware(app.wsgi_app,
-                       restrictions=[30])
+                                          restrictions=[30])
         options.debug = True
 
     app.run(
