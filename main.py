@@ -57,7 +57,7 @@ def process_events(logger_config, event_queues_dict, subscribers_dict):
     event_handler_queue = event_queues_dict.get(EVENT_PROCESSOR)
     while True:
         key, event = event_handler_queue.get()
-        for dict_key, subscribers in subscribers_dict.iteritems():
+        for dict_key, subscribers in subscribers_dict.items():
             if key == dict_key:
                 for subscriber in subscribers:
                     logger.debug('Process event: {0} to subscriber: {1}'.format(event, subscriber))
@@ -168,7 +168,7 @@ def run_bots(config, stop_event):
                 bots[channel_mongo_id].send_message(chat_id=chat_id, text=text.encode('utf-8')) \
                     if channel_type == CHANNEL_TYPE_TELEGRAM \
                     else bots[channel_mongo_id].post_messages_to_public_account(
-                    sender=bot.get_account_info()['id'],
+                    sender=bot.get_account_info()['members'].pop()['id'],
                     messages=[TextMessage(text=text)]) \
                     if channel_type == CHANNEL_TYPE_VIBER else None
                 mark_as_finished(mongo_config, campaign_id)

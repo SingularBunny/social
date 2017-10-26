@@ -92,4 +92,4 @@ def make_telegram_bot(bot_auth_token):
 
 
 def make_telegram_deep_link(deeplink_pattern, bot_id, channel_id, campaign_id):
-    return deeplink_pattern.format(bot_id, urlsafe_b64encode(channel_id + ';' + campaign_id))
+    return deeplink_pattern.format(bot_id, urlsafe_b64encode((channel_id + ';' + campaign_id).encode('ascii')))

@@ -107,4 +107,4 @@ def make_viber_bot(bot_name, bot_avatar, bot_auth_token):
 
 
 def make_viber_deep_link(deeplink_pattern, bot_id, channel_id, campaign_id):
-    return deeplink_pattern.format(bot_id, urlsafe_b64encode(channel_id + ';' + campaign_id))
+    return deeplink_pattern.format(bot_id, urlsafe_b64encode((channel_id + ';' + campaign_id).encode('ascii')))
