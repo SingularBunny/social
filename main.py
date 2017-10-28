@@ -94,7 +94,7 @@ def run_bots(config, stop_event):
     bot_config = config['bot']
 
     logging.config.dictConfig(logger_config)
-    logger = logging.getLogger(STATS_MAINTAINER)
+    logger = logging.getLogger(BOT_RUNNER)
     logger.debug('{0} started'.format(BOT_RUNNER))
 
     apps = {}
@@ -106,9 +106,7 @@ def run_bots(config, stop_event):
             break
 
         # run bots
-
-        port = 8443
-        channel_type = 'telegram'
+        port = 8440
 
         for channel in get_channels(mongo_config):
             channel_mongo_id = channel['_id']
@@ -117,20 +115,26 @@ def run_bots(config, stop_event):
             token = authdata['api_key']
             chat_id = '@cannabusiness'
 
+            logger.debug('Channel: {}'.format(channel))
             if channel_mongo_id not in apps:
                 if channel_type == 'viber':
-                    # TODO add valid bot name and avatar
                     bot = make_viber_bot("test", None, token)
                     app = make_viber_app(config, event_queues_dict[EVENT_PROCESSOR], bot,
                                          bot_config['webhookUrl'].format(port))
                     pass
                 elif channel_type == 'telegram':
+                    acceptablePorts = [port for port in bot_config['telegram']['acceptablePorts'] if port not in ports]
 
-                    acceptable_ports = bot_config['telegram']['acceptablePorts']
-                    # TODO chose port here
+                    if not acceptablePorts:
+                        logger.error("Haven't acceptable ports for {}".format(channel_type))
+                        continue
+
+                    port = acceptablePorts.pop()
                     bot = make_telegram_bot(token)
                     app = make_telegram_app(config, event_queues_dict[EVENT_PROCESSOR], bot,
                                             bot_config['webhookUrl'].format(port))
+
+                logger.debug('Start {0} bot on {1} port'.format(channel_type, port))
 
                 app.webhook_setter.start()
                 app_process = Process(name='',
@@ -142,6 +146,7 @@ def run_bots(config, stop_event):
                 apps[channel_mongo_id] = bot
                 bots[channel_mongo_id] = bot
                 ports[channel_mongo_id] = port
+                port += 1
 
             if channel_type == CHANNEL_TYPE_TELEGRAM:
                 update_channel_members_count(mongo_config, channel_mongo_id, chat_id, bots[channel_mongo_id])
@@ -164,7 +169,6 @@ def run_bots(config, stop_event):
                 assert (campaign_id is not None and text is not None)
 
                 text += ' ' + deep_link
-                # TODO change send message section to sent in Viber too.
                 bots[channel_mongo_id].send_message(chat_id=chat_id, text=text.encode('utf-8')) \
                     if channel_type == CHANNEL_TYPE_TELEGRAM \
                     else bots[channel_mongo_id].post_messages_to_public_account(
