@@ -1,0 +1,15 @@
+[Unit]
+Description=AdMsg
+
+[Service]
+User=dante
+# The configuration file application.properties should be here:
+WorkingDirectory=/home/dante/admsg/
+ExecStart=/anaconda3/bin/python main.py
+SuccessExitStatus=143
+TimeoutStopSec=10
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
